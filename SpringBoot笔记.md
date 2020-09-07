@@ -196,7 +196,7 @@ Spring Initializr：https://start.spring.io/
 
 
 
-![images/](SpringBoot笔记.assets/搜狗截图20180129151112-1599449061218.png)
+![images/](SpringBoot笔记.assets/搜狗截图20180129151112.png)
 
 ## 6、创建第一个HelloWorld
 
@@ -2026,7 +2026,17 @@ private Resource getIndexHtml(String location) {
 
 **==注意==**：即使我们将index.html放在那几个文件夹下面通过首页控制器还是会报404错误的，那是因为我们没有配置
 
-thymeleaf模板引擎。
+### 1、引入thymeleaf模板引擎
+
+JSP、Velocity、Freemarker、Thymeleaf
+
+![](SpringBoot笔记.assets/template-engine.png)
+
+
+
+SpringBoot推荐的Thymeleaf；
+
+语法更简单，功能更强大；
 
 ```java
 package com.example.springboot02.controller;
@@ -2047,7 +2057,7 @@ public class IndexController {
 
 ![image-20200904153102989](SpringBoot笔记.assets/image-20200904153102989-1599449486157.png)
 
-![](一、Spring Boot 入门.assets/image-20200904152713865.png)
+![](SpringBoot笔记.assets/image-20200904152713865.png)
 
 下面我们讲述怎么配置模板引擎，将我们的首页通过控制器展示出来
 
@@ -2087,6 +2097,14 @@ public class IndexController {
 [下载地址1](https://www.thymeleaf.org/documentation.html)
 
 [thymeleaf的下载地址](https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.pdf)
+
+导入thymeleaf的名称空间
+
+```xml
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+```
+
+
 
 ## **5、thymeleaf基本语法**
 
@@ -2202,4 +2220,415 @@ Special tokens:
     No-Operation: _  
 ```
 
+## 6、SpringMVC自动配置
+
+有了springboot自动帮我们配置好的springmvc的相关东西，一切都变得简单，我们接下来看看springboot帮我们做了哪些事，虽然springboot帮我们做好了那么多事，那我们可不可以定制自己的springmvc,那到底我们自己写的配置是会和springboot覆盖合并还是兼容呢，我们一起看看springboot官方文档
+
 [springboot官方文档](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-developing-web-applications)
+
+[springboot官方文档2](https://docs.spring.io/spring-boot/docs/2.2.5.RELEASE/reference/htmlsingle/#boot-features-spring-mvc-auto-configuration)
+
+上面两个都是文档地址 看看那个能打开，下面的图也是说明这个文档的内容，我们简单翻译一下下面的内容
+
+![image-20200907144835261](SpringBoot笔记.assets/image-20200907144835261.png)
+
+```java
+
+Spring MVC Auto-configuration
+// Spring Boot为Spring MVC提供了自动配置，它可以很好地与大多数应用程序一起工作。
+Spring Boot provides auto-configuration for Spring MVC that works well with most applications.
+// 自动配置在Spring默认设置的基础上添加了以下功能：
+The auto-configuration adds the following features on top of Spring’s defaults:
+// 包含视图解析器
+Inclusion of ContentNegotiatingViewResolver and BeanNameViewResolver beans.
+// 支持静态资源文件夹的路径，以及webjars
+Support for serving static resources, including support for WebJars 
+// 自动注册了Converter：
+// 转换器，这就是我们网页提交数据到后台自动封装成为对象的东西，比如把"1"字符串自动转换为int类型
+// Formatter：【格式化器，比如页面给我们了一个2019-8-10，它会给我们自动格式化为Date对象】
+Automatic registration of Converter, GenericConverter, and Formatter beans.
+// HttpMessageConverters
+// SpringMVC用来转换Http请求和响应的的，比如我们要把一个User对象转换为JSON字符串，可以去看官网文档解释；
+Support for HttpMessageConverters (covered later in this document).
+// 定义错误代码生成规则的
+Automatic registration of MessageCodesResolver (covered later in this document).
+// 首页定制
+Static index.html support.
+// 图标定制
+Custom Favicon support (covered later in this document).
+// 初始化数据绑定器：帮我们把请求数据绑定到JavaBean中！
+Automatic use of a ConfigurableWebBindingInitializer bean (covered later in this document).
+
+/*
+如果您希望保留Spring Boot MVC功能，并且希望添加其他MVC配置（拦截器、格式化程序、视图控制器和其他功能），则可以添加自己
+的@configuration类，类型为webmvcconfiguer，但不添加@EnableWebMvc。如果希望提供
+RequestMappingHandlerMapping、RequestMappingHandlerAdapter或ExceptionHandlerExceptionResolver的自定义
+实例，则可以声明WebMVCregistrationAdapter实例来提供此类组件。
+*/
+If you want to keep Spring Boot MVC features and you want to add additional MVC configuration 
+(interceptors, formatters, view controllers, and other features), you can add your own 
+@Configuration class of type WebMvcConfigurer but without @EnableWebMvc. If you wish to provide 
+custom instances of RequestMappingHandlerMapping, RequestMappingHandlerAdapter, or 
+ExceptionHandlerExceptionResolver, you can declare a WebMvcRegistrationsAdapter instance to provide such components.
+
+// 如果您想完全控制Spring MVC，不使用任何springboot提供的默认配字，可以添加自己的@Configuration，并用@EnableWebMvc进行注释。
+If you want to take complete control of Spring MVC, you can add your
+```
+
+我们来仔细对照，看一下它怎么实现的，它告诉我们SpringBoot已经帮我们自动配置好了SpringMVC，然后自动配置了哪些东西呢？
+
+### 1、**ContentNegotiatingViewResolver 内容协商视图解析器** 
+
+自动配置了ViewResolver，就是我们之前学习的SpringMVC的视图解析器；
+
+即根据方法的返回值取得视图对象（View），然后由视图对象决定如何渲染（转发，重定向）。
+
+我们去看看这里的源码：我们找到 WebMvcAutoConfiguration ， 然后搜索ContentNegotiatingViewResolver。点进去找到如下方法！
+
+```java
+@Nullable
+public View resolveViewName(String viewName, Locale locale) throws Exception {
+    RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+    Assert.state(attrs instanceof ServletRequestAttributes, "No current ServletRequestAttributes");
+    List<MediaType> requestedMediaTypes = this.getMediaTypes(((ServletRequestAttributes)attrs).getRequest());
+    if (requestedMediaTypes != null) {
+        // 获取候选的视图对象
+        List<View> candidateViews = this.getCandidateViews(viewName, locale, requestedMediaTypes);
+         // 选择一个最适合的视图对象，然后把这个对象返回
+        View bestView = this.getBestView(candidateViews, requestedMediaTypes, attrs);
+        if (bestView != null) {
+            return bestView;
+        }
+    }
+
+    String mediaTypeInfo = this.logger.isDebugEnabled() && requestedMediaTypes != null ? " given " + requestedMediaTypes.toString() : "";
+    if (this.useNotAcceptableStatusCode) {
+        if (this.logger.isDebugEnabled()) {
+            this.logger.debug("Using 406 NOT_ACCEPTABLE" + mediaTypeInfo);
+        }
+
+        return NOT_ACCEPTABLE_VIEW;
+    } else {
+        this.logger.debug("View remains unresolved" + mediaTypeInfo);
+        return null;
+    }
+}
+```
+
+我们继续点进去看，他是怎么获得候选的视图的呢？
+
+getCandidateViews中看到他是把所有的视图解析器拿来，进行while循环，挨个解析！
+
+```java
+private List<View> getCandidateViews(String viewName, Locale locale, List<MediaType> requestedMediaTypes) throws Exception {
+        List<View> candidateViews = new ArrayList();
+        if (this.viewResolvers != null) {
+            Assert.state(this.contentNegotiationManager != null, "No ContentNegotiationManager set");
+            //循环解析
+            Iterator var5 = this.viewResolvers.iterator();
+
+            while(var5.hasNext()) {
+                ViewResolver viewResolver = (ViewResolver)var5.next();
+                View view = viewResolver.resolveViewName(viewName, locale);
+                if (view != null) {
+                    candidateViews.add(view);
+                }
+
+                Iterator var8 = requestedMediaTypes.iterator();
+
+                while(var8.hasNext()) {
+                    MediaType requestedMediaType = (MediaType)var8.next();
+                    List<String> extensions = this.contentNegotiationManager.resolveFileExtensions(requestedMediaType);
+                    Iterator var11 = extensions.iterator();
+
+                    while(var11.hasNext()) {
+                        String extension = (String)var11.next();
+                        String viewNameWithExtension = viewName + '.' + extension;
+                        view = viewResolver.resolveViewName(viewNameWithExtension, locale);
+                        if (view != null) {
+                            candidateViews.add(view);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!CollectionUtils.isEmpty(this.defaultViews)) {
+            candidateViews.addAll(this.defaultViews);
+        }
+
+        return candidateViews;
+    }
+
+```
+
+所以得出结论：**ContentNegotiatingViewResolver 这个视图解析器就是用来组合所有的视图解析器的** 
+
+我们再去研究下他的组合逻辑，看到有个属性viewResolvers，看看它是在哪里进行赋值的！
+
+
+
+```java
+protected void initServletContext(ServletContext servletContext) {
+    // 这里它是从beanFactory工具中获取容器中的所有视图解析器
+    // ViewRescolver.class 把所有的视图解析器来组合的
+    Collection<ViewResolver> matchingBeans = BeanFactoryUtils.beansOfTypeIncludingAncestors(this.obtainApplicationContext(), ViewResolver.class).values();
+    ViewResolver viewResolver;
+    if (this.viewResolvers == null) {
+        this.viewResolvers = new ArrayList(matchingBeans.size());
+        Iterator var3 = matchingBeans.iterator();
+
+        while(var3.hasNext()) {
+            viewResolver = (ViewResolver)var3.next();
+            if (this != viewResolver) {
+                this.viewResolvers.add(viewResolver);
+            }
+        }
+    } else {
+        for(int i = 0; i < this.viewResolvers.size(); ++i) {
+            viewResolver = (ViewResolver)this.viewResolvers.get(i);
+            if (!matchingBeans.contains(viewResolver)) {
+                String name = viewResolver.getClass().getName() + i;
+                this.obtainApplicationContext().getAutowireCapableBeanFactory().initializeBean(viewResolver, name);
+            }
+        }
+    }
+
+    AnnotationAwareOrderComparator.sort(this.viewResolvers);
+    this.cnmFactoryBean.setServletContext(servletContext);
+}
+```
+
+既然它是在容器中去找视图解析器，我们是否可以猜想，我们就可以去实现一个视图解析器了呢？
+
+我们可以自己给容器中去添加一个视图解析器；这个类就会帮我们自动的将它组合进来；**我们去实现一下**
+
+### 2、自己写一个视图解析器
+
+首先根据上面的提示我们在已有的功能扩展 只要添加一个
+
+1、我们在我们的主程序中去写一个视图解析器来试试
+
+```java
+/**
+ *
+ * 这是自己写的mvc配置类，如果不是全面接管就一定不要加
+ *   //现在我们需要增加一个视图解析器
+ */
+@Configuration //一定要标准这个是一个配置类 因为是增加视图解析器 所以增加一个ViewResolver
+public class MyViewResolver implements ViewResolver {
+
+    //我们写一个类，视图解析器就需要实现ViewResolver接口
+    
+    //将我们写好的视图解析器交给springboot自动装配
+    @Bean
+    public ViewResolver MyViewResolver(){
+        return new MyViewResolver();
+    }
+
+    @Override
+    public View resolveViewName(String s, Locale locale) throws Exception {
+        return null;
+    }
+}
+
+```
+
+2、怎么看我们自己写的视图解析器有没有起作用呢？
+
+我们给 DispatcherServlet 中的 doDispatch方法 加个断点进行调试一下，因为所有的请求都会走到这个方法中
+
+![img](SpringBoot笔记.assets/640-5.jpg)
+
+3、我们启动我们的项目，然后随便访问一个页面，看一下Debug信息；
+
+找到this
+
+![img](SpringBoot笔记.assets/640-6.jpg)
+
+找到视图解析器，我们看到我们自己定义的就在这里了；
+
+![image-20200907152921120](SpringBoot笔记.assets/image-20200907152921120.png)
+
+所以说，我们如果想要使用自己定制化的东西，我们只需要给容器中添加这个组件就好了！剩下的事情SpringBoot就会帮我们做了！
+
+在举一个例子
+
+### 3、写一个视图跳转控制器
+
+```java
+/**
+ *
+ * 这是自己写的mvc配置类，如果不是全面接管就一定不要加@EnableWebMvc
+ */
+@Configuration//标注这个是一个配置类
+public class MyMvcConfig implements WebMvcConfigurer {//实现WebMvcConfigurer 接口 想要什么功能就定制什么功能
+
+
+    //前面已经看到了这个视图解析器是怎么定制的  现在我们看看怎么添加视图跳转
+    //因为因为向首页这个我们是放在了templates里面，并且我们引入了thymeleaf模板引擎，这个模板引擎会帮我们去找和这个文件夹里面的index自动作为首页跳转，不需要写逻辑控制器
+    //  所以springboot在我们访问localhost://8080自动显示
+    //但是我们现在有一个success.html 里面我们也没有任何数据显示 只是一张页面我们也不想在controller里面增加一个这个进行跳转 ，那应该怎么办呢
+    //所以就有了下面这个
+
+    //添加视图控制
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/success").setViewName("success");
+    }
+}
+
+```
+
+![image-20200907154852465](SpringBoot笔记.assets/image-20200907154852465.png)
+
+![image-20200907154930630](SpringBoot笔记.assets/image-20200907154930630.png)
+
+**确实也跳转过来了！所以说，我们要扩展SpringMVC，官方就推荐我们这么去使用，既保SpringBoot留所有的自动配置，也能用我们扩展的配置！**
+
+我们可以去分析一下原理：
+
+1、WebMvcAutoConfiguration 是 SpringMVC的自动配置类，里面有一个类WebMvcAutoConfigurationAdapter
+
+2、这个类上有一个注解，在做其他自动配置时会导入：@Import(EnableWebMvcConfiguration.class)
+
+3、我们点进EnableWebMvcConfiguration这个类看一下，它继承了一个父类：DelegatingWebMvcConfiguration
+
+这个父类中有这样一段代码：
+
+```java
+
+@Configuration(
+    proxyBeanMethods = false
+)
+public class DelegatingWebMvcConfiguration extends WebMvcConfigurationSupport {
+    private final WebMvcConfigurerComposite configurers = new WebMvcConfigurerComposite();
+
+    public DelegatingWebMvcConfiguration() {
+    }
+ // 从容器中获取所有的webmvcConfigurer
+    @Autowired(
+        required = false
+    )
+    public void setConfigurers(List<WebMvcConfigurer> configurers) {
+        if (!CollectionUtils.isEmpty(configurers)) {
+            this.configurers.addWebMvcConfigurers(configurers);
+        }
+
+    }
+}
+```
+
+4、我们可以在这个类中去寻找一个我们刚才设置的viewController当做参考，发现它调用了一个
+
+```java
+ protected void addViewControllers(ViewControllerRegistry registry) {
+        this.configurers.addViewControllers(registry);
+ }
+```
+
+5、我们点进去看一下
+
+```java
+  public void addViewControllers(ViewControllerRegistry registry) {
+        Iterator var2 = this.delegates.iterator();
+   // 将所有的WebMvcConfigurer相关配置来一起调用！包括我们自己配置的和Spring给我们配置的
+        while(var2.hasNext()) {
+            WebMvcConfigurer delegate = (WebMvcConfigurer)var2.next();
+            delegate.addViewControllers(registry);
+        }
+
+    }
+
+```
+
+所以得出结论：所有的WebMvcConfiguration都会被作用，不止Spring自己的配置类，我们自己的配置类当然也会被调用；
+
+### 4、全面接管springmvc
+
+官方文档：
+
+```
+If you want to take complete control of Spring MVCyou can add your own @Configuration annotated with @EnableWebMvc.
+```
+
+全面接管即：SpringBoot对SpringMVC的自动配置不需要了，所有都是我们自己去配置！
+
+只需在我们的配置类中要加一个@EnableWebMvc。
+
+我们看下如果我们全面接管了SpringMVC了，我们之前SpringBoot给我们配置的静态资源映射一定会无效，我们可以去测试一下；
+
+不加注解之前，访问首页：
+
+![image-20200907160308864](SpringBoot笔记.assets/image-20200907160308864.png)
+
+加了注解后
+
+![image-20200907160231946](SpringBoot笔记.assets/image-20200907160231946.png)
+
+我们发现所有的SpringMVC自动配置都失效了！回归到了最初的样子；
+
+**当然，我们开发中，不推荐使用全面接管SpringMVC**
+
+思考问题？为什么加了一个注解，自动配置就失效了！我们看下源码，点击@EnableWebMvc：
+
+1、这里发现它是导入了一个类，我们可以继续进去看
+
+```java
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE})
+@Documented
+@Import({DelegatingWebMvcConfiguration.class})//导入了这个类
+public @interface EnableWebMvc {
+}
+
+```
+
+2、点击DelegatingWebMvcConfiguration.class 它继承了一个父类 ==WebMvcConfigurationSupport==
+
+```java
+public class DelegatingWebMvcConfiguration extends WebMvcConfigurationSupport {
+    private final WebMvcConfigurerComposite configurers = new WebMvcConfigurerComposite();
+
+    public DelegatingWebMvcConfiguration() {
+    }
+}
+```
+
+3、我们来回顾一下Webmvc自动配置类
+
+```java
+
+@Configuration(
+    proxyBeanMethods = false
+)
+@ConditionalOnWebApplication(
+    type = Type.SERVLET
+)
+@ConditionalOnClass({Servlet.class, DispatcherServlet.class, WebMvcConfigurer.class})
+@ConditionalOnMissingBean({WebMvcConfigurationSupport.class})////容器中没有这个组件的时候，这个自动配置类才生效一旦有了下面任何配置都不生效
+@AutoConfigureOrder(-2147483638)
+@AutoConfigureAfter({DispatcherServletAutoConfiguration.class, TaskExecutionAutoConfiguration.class, ValidationAutoConfiguration.class})
+public class WebMvcAutoConfiguration {
+    public static final String DEFAULT_PREFIX = "";
+    public static final String DEFAULT_SUFFIX = "";
+    private static final String[] SERVLET_LOCATIONS = new String[]{"/"};
+
+    public WebMvcAutoConfiguration() {
+    }
+```
+
+总结一句话：@EnableWebMvc将==WebMvcConfigurationSupport==组件导入进来了；
+
+而导入的WebMvcConfigurationSupport只是SpringMVC最基本的功能！
+
+### 5、如何修改SpringBoot的默认配置
+
+模式：
+
+​	1）、SpringBoot在自动配置很多组件的时候，先看容器中有没有用户自己配置的（@Bean、@Component）如果有就用用户配置的，如果没有，才自动配置；如果有些组件可以有多个（ViewResolver）将用户配置的和自己默认的组合起来；
+
+​	2）、在SpringBoot中会有非常多的xxxConfigurer帮助我们进行扩展配置
+
+​	3）、在SpringBoot中会有很多的xxxCustomizer帮助我们进行定制配置
