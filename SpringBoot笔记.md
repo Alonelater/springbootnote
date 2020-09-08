@@ -2632,3 +2632,941 @@ public class WebMvcAutoConfiguration {
 ​	2）、在SpringBoot中会有非常多的xxxConfigurer帮助我们进行扩展配置
 
 ​	3）、在SpringBoot中会有很多的xxxCustomizer帮助我们进行定制配置
+
+
+
+## 7、restful风格的crud小项目
+
+### 1）、资源准备
+
+[尚硅谷的视频资料](https://www.bilibili.com/video/BV1Et411Y7tQ)
+
+### 2）、页面国际化
+
+**1）、编写国际化配置文件；**
+
+​		在resources编写i18n文件夹，创建login.properties，login_zh_CN.properties,login_en_US.properties文件，填写参数
+
+![image-20200908090611722](SpringBoot笔记.assets/image-20200908090611722.png)
+
+2）、使用ResourceBundleMessageSource管理国际化资源文件
+
+3）、在页面使用thymeleaf取出国际化内容
+
+```java
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<meta name="description" content="">
+		<meta name="author" content="">
+		<title>Signin Template for Bootstrap</title>
+		<!-- Bootstrap core CSS -->
+		<link th:href="@{/asserts/css/bootstrap.min.css}" rel="stylesheet">
+		<!-- Custom styles for this template -->
+		<link th:href="@{asserts/css/signin.css}" rel="stylesheet">
+	</head>
+
+	<body class="text-center">
+		<form class="form-signin" th:action="@{/user/login}">
+			<img class="mb-4" th:src="@{/asserts/img/bootstrap-solid.svg}" alt="" width="72" height="72">
+			<h1 class="h3 mb-3 font-weight-normal" th:text="#{login.tip}"></h1>
+			<!--如果msg不为空，那就显示-->
+			<p style="color: red" th:text="${msg}" th:if="${not #strings.isEmpty(msg)}"></p>
+			<input type="text" class="form-control" name="username"  required="" autofocus="" th:placeholder="#{login.username}">
+			<input type="password" class="form-control" name="password" th:placeholder="#{login.password}" required="">
+			<div class="checkbox mb-3">
+				<label>
+          <input type="checkbox" th:value="remember-me" th:text="#{login.remember}">
+        </label>
+			</div>
+			<button class="btn btn-lg btn-primary btn-block" th:text="#{login.button}" type="submit"></button>
+			<p class="mt-5 mb-3 text-muted">© 2017-2018</p>
+			<a class="btn btn-sm" th:href="@{/index.html(l=zh_CN)}">中文</a>
+			<!--配置页面国际化，使用不同的链接，因为页面还是跳转回来所以还是用首页的地址用/或者/index.html,只要自己再去写国际化的规则就行了-->
+			<a class="btn btn-sm" th:href="@{/index.html(l=en_US)}">English</a>
+		</form>
+
+
+	</body>
+
+</html>
+```
+
+上面已经写好了页面，接下来就是逻辑的问题
+
+### 3）、编写自己写的国际化类
+
+```java
+package com.springboot03.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.util.StringUtils;
+import org.springframework.web.servlet.LocaleResolver;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Locale;
+
+/**
+ * 实现国际化 那我们就要实现 没有写@Configuration  所以我门要将组件放在有@Configuration的类下面
+ */
+public class MyLocaleResolver implements LocaleResolver {
+    @Override
+    public Locale resolveLocale(HttpServletRequest httpServletRequest) {
+        //得到我们设置的参数
+        String lanuages = httpServletRequest.getParameter("l");
+
+        Locale locale = null;
+        //如果不为空 那就将我们得到的地区信息设置进去
+        if (!StringUtils.isEmpty(lanuages)) {
+
+            String[] s = lanuages.split("_");
+            locale = new Locale(s[0], s[1]);
+
+        } else {
+            //如果为空就使用默认的
+            locale = Locale.getDefault();
+        }
+        return locale;
+    }
+
+    @Override
+    public void setLocale(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, Locale locale) {
+
+    }
+    //添加国际化组件  我们已经写好了javaBean类  这里不能添加进容器 下面我会提供为什么不能被添加到容器中
+    @Bean
+    public LocaleResolver localeResolver(){
+        return  new MyLocaleResolver();
+    }
+}
+
+```
+
+将这个组件添加到容器中
+
+```java
+package com.springboot03.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration//自己写的mvc配置类
+public class MyMvcConfig implements WebMvcConfigurer {
+
+
+    //由于首页没有任何逻辑 直接写一个controller不合适 所以我们使用扩展mvc来实现页面跳转
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/").setViewName("index");
+        registry.addViewController("/index.html").setViewName("index");
+    }
+
+
+    //添加国际化组件  我们已经写好了javaBean类   这里就能添加到容器里面了 因为这个类上有@Configuration标注
+    @Bean
+    public LocaleResolver localeResolver(){
+        return  new MyLocaleResolver();
+    }
+
+}
+
+```
+
+### 4）、关于@Configuration和@Bean的疑惑
+
+问题的提出：[**springboot 的properties已经包含了很多默认配置了 我们再用@Configuration 配置的目的是什么 ？**](https://segmentfault.com/q/1010000016119057)
+
+问题回答：**在Spring Boot中，Starter为我们自动启用了很多Bean，这些Bean的配置信息通过properties的方式暴露出来以供使用人员调整参数，但并不是通过调整properties文件能配置所有的Bean，一下负责的Bean配置还是需要使用@Configuration方式，比如Spring Security的WebSecurityConfigurerAdapter配置。**
+
+@Configuration注解可以达到在Spring中使用xml配置文件的作用。
+
+@Bean就等同于xml配置文件中的<bean>
+
+1、第一种自己写的类，Controller，Service。 用@controller @service即可
+
+2、第二种，集成其它框架，比如集成shiro权限框架，集成mybatis分页插件PageHelper，第三方框架的核心类都要交于Spring大管家管理
+
+@Configuration可理解为用spring的时候xml里面的<beans>标签
+
+@Bean可理解为用spring的时候xml里面的<bean>标签
+
+Spring Boot不是spring的加强版，所以@Configuration和@Bean同样可以用在普通的spring项目中，而不是Spring Boot特有的，只是在spring用的时候，注意加上扫包配置
+
+<context:component-scan base-package="com.xxx.xxx" />，普通的spring项目好多注解都需要扫包，才有用，有时候自己注解用的挺6，但不起效果，就要注意这点。
+
+Spring Boot则不需要，主要你保证你的启动Spring Boot main入口，在这些类的上层包就行。
+
+==**补充：**==
+
+**@Configuration 基本说明**
+
+定义：指示一个类声明一个或者多个@Bean 声明的方法并且由Spring容器统一管理，以便在运行时为这些bean生成bean的定义和服务请求的类。
+
+例如：
+
+```java
+@Configuration
+public class AppConfig{
+    @Bean
+    public MyBean myBean{
+    	return new MyBean();
+    }
+}
+```
+
+上述AppConfig 加入@Configuration 注解，表明这就是一个配置类。有一个myBean的方法，返回一个MyBean的实例，并用@Bean 进行注释，表明这个方法是需要被Spring进行管理的bean。@Bean 如果不指定名称的话，默认使用myBean名称，也就是小写的名称。
+
+### 5）、页面测试国际化
+
+中文：![image-20200908100556283](SpringBoot笔记.assets/image-20200908100556283.png)
+
+英文：![image-20200908100619439](SpringBoot笔记.assets/image-20200908100619439.png)
+
+### 6）、登陆
+
+开发期间模板引擎页面修改以后，要实时生效
+
+1）、禁用模板引擎的缓存
+
+```
+# 禁用缓存
+spring.thymeleaf.cache=false 
+```
+
+2）、页面修改完成以后ctrl+f9：重新编译；
+
+登陆错误消息的显示
+
+```html
+<p style="color: red" th:text="${msg}" th:if="${not #strings.isEmpty(msg)}"></p>
+```
+
+登录控制器：
+
+```java
+package com.springboot03.controller;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+/**
+ * 登录控制器
+ *
+ */
+@Controller
+public class LoginController {
+
+    //因为数据库是伪造的，所以只要密码用户名不为空就让他登录成功  我们看到我们的index界面有问题 没有一些name属性 我们改一改，增加登陆失败提示
+
+
+    @RequestMapping("/user/login")
+    public String login(@RequestParam("username")String username,
+                        @RequestParam("password")String password,
+                        Model model){
+        if (!StringUtils.isEmpty(username)&&"123456".equals(password)){
+            return "redirect:/main.html";//在视图跳转添加一个路径然后让他经过视图控制器转发到真正的视图，直接让他访问后台 省的我们的get请求被看了用户名和密码
+        }else {
+            model.addAttribute("msg","用户名或密码错误");
+            return "/index";//不能直接返回/ 因为这个是要拼接.html的那样也找不到这个/index的界面，如果用了model就不能用重定向，因为这个重新发过请求 是二次请求 model数据携带不过去
+            
+        }
+
+    }
+}
+
+```
+
+上面我们发现我们没有设置拦截器，所以下面设置拦截器。
+
+### 7）、设置拦截器
+
+首先修改原来的代码
+
+```java
+/**
+ * 登录控制器
+ */
+@Controller
+public class LoginController {
+
+    //因为数据库是伪造的，所以只要密码用户名不为空就让他登录成功  我们看到我们的index界面有问题 没有一些name属性 我们改一改，增加登陆失败提示
+
+
+    @RequestMapping("/user/login")
+    public String login(@RequestParam("username") String username,
+                        @RequestParam("password") String password,
+                        Model model, HttpSession session) {
+        if (!StringUtils.isEmpty(username) && "123456".equals(password)) {
+            //登录成功设置session
+            session.setAttribute("user",username);
+            return "redirect:/main.html";//在视图跳转添加一个路径然后让他经过视图控制器转发到真正的视图，直接让他访问后台 省的我们的get请求被看了用户名和密码
+        } else {
+            model.addAttribute("msg", "用户名或密码错误");
+            return "/index";//不能直接返回/ 因为这个是要拼接.html的那样也找不到这个/index的界面，如果用了model就不能用重定向，因为这个重新发过请求 是二次请求 model数据携带不过去
+
+        }
+
+    }
+}
+
+```
+
+添加拦截器
+
+```java
+package com.springboot03.config;
+
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+public class LoginHanderInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        //获取session  只要登录了就有
+        String user = (String) request.getSession().getAttribute("user");
+        if (user!=null){
+            return true;
+        }else {
+            request.setAttribute("msg","请先登录,否则没有操作权限");
+            request.getRequestDispatcher("/index.html").forward(request,response);
+            return false;
+        }
+
+    }
+}
+```
+
+添加拦截器组件
+
+```java
+package com.springboot03.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration//自己写的mvc配置类
+public class MyMvcConfig implements WebMvcConfigurer {
+
+
+    //由于首页没有任何逻辑 直接写一个controller不合适 所以我们使用扩展mvc来实现页面跳转
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/").setViewName("index");
+        registry.addViewController("/index.html").setViewName("index");
+        //添加登录界面的视图映射
+        registry.addViewController("/main.html").setViewName("dashboard");
+    }
+
+
+    //添加国际化组件  我们已经写好了javaBean类
+    @Bean
+    public LocaleResolver localeResolver(){
+        return  new MyLocaleResolver();
+    }
+
+
+    //添加拦截器组件
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        //拦截全部请求
+        registry.addInterceptor(new LoginHanderInterceptor()).addPathPatterns("/**").
+            //在拦截这些所有请求下面不拦截以下规则的内容，有静态的，也有非静态的
+                excludePathPatterns("/","/index.html","/user/login","/asserts/**");
+    }
+}
+```
+
+上面拦截器已经生效 接下来就是去展示数据，首先对页面进行改造
+
+### 8）、thymeleaf公共页面元素抽取
+
+![image-20200908115245531](SpringBoot笔记.assets/image-20200908115245531.png)
+
+![image-20200908115127557](SpringBoot笔记.assets/image-20200908115127557.png)
+
+基本语法
+
+```html
+1、抽取公共片段
+<div th:fragment="copy">
+&copy; 2011 The Good Thymes Virtual Grocery
+</div>
+
+2、引入公共片段
+<div th:insert="~{footer :: copy}"></div>
+~{templatename::selector}：模板名::选择器
+~{templatename::fragmentname}:模板名::片段名
+
+3、默认效果：
+insert的公共片段在div标签中
+如果使用th:insert等属性进行引入，可以不用写~{}：
+行内写法可以加上：[[~{}]];[(~{})]；
+```
+
+三种引入公共片段的th属性：
+
+**th:insert**：将公共片段整个插入到声明引入的元素中
+
+**th:replace**：将声明引入的元素替换为公共片段
+
+**th:include**：将被引入的片段的内容包含进这个标签中
+
+改造后的list界面
+
+```html
+<!DOCTYPE html>
+<!-- saved from url=(0052)http://getbootstrap.com/docs/4.0/examples/dashboard/ -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+      <meta name="description" content="">
+      <meta name="author" content="">
+
+      <title>Dashboard Template for Bootstrap</title>
+      <!-- Bootstrap core CSS -->
+      <link th:href="@{/asserts/css/bootstrap.min.css}" rel="stylesheet">
+
+      <!-- Custom styles for this template -->
+      <link th:href="@{/asserts/css/dashboard.css}" rel="stylesheet">
+      <style type="text/css">
+         /* Chart.js */
+         
+         @-webkit-keyframes chartjs-render-animation {
+            from {
+               opacity: 0.99
+            }
+            to {
+               opacity: 1
+            }
+         }
+         
+         @keyframes chartjs-render-animation {
+            from {
+               opacity: 0.99
+            }
+            to {
+               opacity: 1
+            }
+         }
+         
+         .chartjs-render-monitor {
+            -webkit-animation: chartjs-render-animation 0.001s;
+            animation: chartjs-render-animation 0.001s;
+         }
+      </style>
+   </head>
+
+   <body>
+
+   <!--添加上部导航条-->
+   <div th:replace="~{/common/common::topBar}"></div>
+
+
+   <div class="container-fluid">
+      <div class="row">
+
+
+         <!--添加侧边栏-->
+         <div th:replace="~{/common/common::slideBar}"></div>
+
+
+         <main role="main" class="col-md-9 ml-sm-auto col-lg-10 pt-3 px-4">
+               <h2>Section title</h2>
+               <div class="table-responsive">
+                  <table class="table table-striped table-sm">
+                     <thead>
+                        <tr>
+
+                           <th>id</th>
+                           <th>lastName</th>
+                           <th>email</th>
+                           <th>gender</th>
+                           <th>department</th>
+                           <th>birth</th>
+                           <th>操作</th>
+                        </tr>
+                     </thead>
+                     <tbody>
+                        <tr th:each="emp:${emps}">
+                           <td th:text="${emp.getId()}"></td>
+                            <td th:text="${emp.getLastName()}"></td>
+                           <td th:text="${emp.getEmail()}"></td>
+                           <td th:text="${emp.getGender()==0?'女':'男'}"></td>
+                           <td th:text="${emp.getDepartment().getDepartmentName()}"></td>
+                           <td th:text="${#dates.format(emp.getBirth(),'yyyy-MM-dd HH:mm:ss')}"></td>
+                           <td>
+                              <a class="btn btn-sm btn-primary">编辑</a>
+                              <a class="btn btn-sm btn-danger">删除</a>
+                           </td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div>
+            </main>
+         </div>
+      </div>
+
+      <!-- Bootstrap core JavaScript
+    ================================================== -->
+      <!-- Placed at the end of the document so the pages load faster -->
+      <script type="text/javascript" th:src="@{/asserts/js/jquery-3.2.1.slim.min.js}" ></script>
+      <script type="text/javascript" th:src="@{/asserts/js/popper.min.js}" ></script>
+      <script type="text/javascript" th:src="@{/asserts/js/bootstrap.min.js}" ></script>
+      <script type="text/javascript" th:src="@{/asserts/js/feather.min.js}" ></script>
+      <script>
+            feather.replace()
+      </script>
+
+      <!-- Graphs -->
+      <script type="text/javascript" th:src="@{/asserts/js/Chart.min.js}" ></script>
+      <script>
+         var ctx = document.getElementById("myChart");
+         var myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+               labels: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+               datasets: [{
+                  data: [15339, 21345, 18483, 24003, 23489, 24092, 12034],
+                  lineTension: 0,
+                  backgroundColor: 'transparent',
+                  borderColor: '#007bff',
+                  borderWidth: 4,
+                  pointBackgroundColor: '#007bff'
+               }]
+            },
+            options: {
+               scales: {
+                  yAxes: [{
+                     ticks: {
+                        beginAtZero: false
+                     }
+                  }]
+               },
+               legend: {
+                  display: false,
+               }
+            }
+         });
+      </script>
+
+   </body>
+
+</html>
+```
+
+效果
+
+![image-20200908134830054](SpringBoot笔记.assets/image-20200908134830054.png)
+
+下面完成编辑删除的操作我就不叙述了 截几个图，重点圈起来
+
+![image-20200908152329822](SpringBoot笔记.assets/image-20200908152329822.png)
+
+update界面
+
+```html
+<!DOCTYPE html>
+<!-- saved from url=(0052)http://getbootstrap.com/docs/4.0/examples/dashboard/ -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Dashboard Template for Bootstrap</title>
+    <!-- Bootstrap core CSS -->
+    <link th:href="@{/asserts/css/bootstrap.min.css}" rel="stylesheet">
+
+    <!-- Custom styles for this template -->
+    <link th:href="@{/asserts/css/dashboard.css}" rel="stylesheet">
+    <style type="text/css">
+        /* Chart.js */
+
+        @-webkit-keyframes chartjs-render-animation {
+            from {
+                opacity: 0.99
+            }
+            to {
+                opacity: 1
+            }
+        }
+
+        @keyframes chartjs-render-animation {
+            from {
+                opacity: 0.99
+            }
+            to {
+                opacity: 1
+            }
+        }
+
+        .chartjs-render-monitor {
+            -webkit-animation: chartjs-render-animation 0.001s;
+            animation: chartjs-render-animation 0.001s;
+        }
+    </style>
+</head>
+
+<body>
+
+<!--添加上部导航条-->
+<div th:replace="~{/common/common::topBar}"></div>
+
+
+<div class="container-fluid">
+    <div class="row">
+
+
+        <!--添加侧边栏-->
+        <div th:replace="~{/common/common::slideBar}"></div>
+
+
+        <main role="main" class="col-md-9 ml-sm-auto col-lg-10 pt-3 px-4">
+
+
+            <div class="table-responsive">
+                <form th:action="@{/update}" method="post">
+                    <input th:type="hidden" name="id" th:value="${emp.getId()}">
+                    <div class="form-group">
+                        <label>LastName</label>
+                        <input type="text" name="lastName" th:value="${emp.getLastName()}" class="form-control" placeholder="zhangsan">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" name="email" th:value="${emp.getEmail()}" class="form-control" placeholder="zhangsan@atguigu.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Gender</label><br/>
+                        <div class="form-check form-check-inline">
+                        <input th:checked="${emp.getGender()==1}" class="form-check-input" type="radio" name="gender"  value="1">
+                        <label class="form-check-label">男</label>
+                    </div>
+                        <div class="form-check form-check-inline">
+                            <input th:checked="${emp.getGender()==0}" class="form-check-input" type="radio" name="gender"  value="0">
+                            <label class="form-check-label">女</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>department</label>
+                        <!--提交的是部门的id-->
+                        <select class="form-control" name="department.id">
+                            <option th:selected="${emp.getDepartment().getId()==dept.getId()}" th:each="dept:${depts}" th:text="${dept.getDepartmentName()}" th:value="${dept.getId()}">1</option>
+
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Birth</label>
+                        <input type="text" th:value="${#dates.format(emp.getBirth(),'yyyy/MM/dd')}" class="form-control" name="birth" placeholder="2020/9/1">
+                    </div>
+                    <button type="submit" class="btn btn-primary">添加</button>
+                </form>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- Bootstrap core JavaScript
+================================================== -->
+<!-- Placed at the end of the document so the pages load faster -->
+<script type="text/javascript" th:src="@{/asserts/js/jquery-3.2.1.slim.min.js}" ></script>
+<script type="text/javascript" th:src="@{/asserts/js/popper.min.js}" ></script>
+<script type="text/javascript" th:src="@{/asserts/js/bootstrap.min.js}" ></script>
+<script type="text/javascript" th:src="@{/asserts/js/feather.min.js}" ></script>
+<script>
+    feather.replace()
+</script>
+
+<!-- Graphs -->
+<script type="text/javascript" th:src="@{/asserts/js/Chart.min.js}" ></script>
+<script>
+    var ctx = document.getElementById("myChart");
+    var myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+            datasets: [{
+                data: [15339, 21345, 18483, 24003, 23489, 24092, 12034],
+                lineTension: 0,
+                backgroundColor: 'transparent',
+                borderColor: '#007bff',
+                borderWidth: 4,
+                pointBackgroundColor: '#007bff'
+            }]
+        },
+        options: {
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: false
+                    }
+                }]
+            },
+            legend: {
+                display: false,
+            }
+        }
+    });
+</script>
+
+</body>
+
+</html>
+```
+
+​	业务逻辑（修改删除）
+
+```java
+@RequestMapping("/emp/{id}")
+public String toUpdate(@PathVariable("id")int id,Model model){
+    Employee employee = employeeDao.get(id);
+    Collection<Department> all = departmentDao.getDepartments();
+    model.addAttribute("depts",all);
+    model.addAttribute("emp",employee);
+    return "/emps/update";
+}
+@PostMapping("/update")
+public String updateEmp(Employee employee){
+    employeeDao.save(employee);
+    return "redirect:/emps";
+}
+@RequestMapping("/del/{id}")
+public String delEmp(@PathVariable("id")int id,Model model){
+    employeeDao.delete(id);
+    return "redirect:/emps";
+}
+```
+
+### 9）、错误页面的定制
+
+#### 1）、SpringBoot默认的错误处理机制
+
+默认效果：
+
+​		1）、浏览器，返回一个默认的错误页面
+
+![](SpringBoot笔记.assets/搜狗截图20180226173408.png)
+
+  浏览器发送请求的请求头：
+
+![](SpringBoot笔记.assets/搜狗截图20180226180347.png)
+
+​		2）、如果是其他客户端，默认响应一个json数据
+
+![](SpringBoot笔记.assets/搜狗截图20180226173527.png)
+
+​		![](SpringBoot笔记.assets/搜狗截图20180226180504.png)
+
+原理：
+
+​	可以参照ErrorMvcAutoConfiguration；错误处理的自动配置；
+
+  	给容器中添加了以下组件
+
+​	1、DefaultErrorAttributes：
+
+```java
+//帮我们在页面共享信息;
+@Override
+	public Map<String, Object> getErrorAttributes(RequestAttributes requestAttributes,
+			boolean includeStackTrace) {
+		Map<String, Object> errorAttributes = new LinkedHashMap<String, Object>();
+		errorAttributes.put("timestamp", new Date());
+		addStatus(errorAttributes, requestAttributes);
+		addErrorDetails(errorAttributes, requestAttributes, includeStackTrace);
+		addPath(errorAttributes, requestAttributes);
+		return errorAttributes;
+	}
+```
+
+
+
+​	2、BasicErrorController：处理默认/error请求
+
+```java
+@Controller
+@RequestMapping("${server.error.path:${error.path:/error}}")
+public class BasicErrorController extends AbstractErrorController {
+    
+    @RequestMapping(produces = "text/html")//产生html类型的数据；浏览器发送的请求来到这个方法处理
+	public ModelAndView errorHtml(HttpServletRequest request,
+			HttpServletResponse response) {
+		HttpStatus status = getStatus(request);
+		Map<String, Object> model = Collections.unmodifiableMap(getErrorAttributes(
+				request, isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+		response.setStatus(status.value());
+        
+        //去哪个页面作为错误页面；包含页面地址和页面内容
+		ModelAndView modelAndView = resolveErrorView(request, response, status, model);
+		return (modelAndView == null ? new ModelAndView("error", model) : modelAndView);
+	}
+
+	@RequestMapping
+	@ResponseBody    //产生json数据，其他客户端来到这个方法处理；
+	public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+		Map<String, Object> body = getErrorAttributes(request,
+				isIncludeStackTrace(request, MediaType.ALL));
+		HttpStatus status = getStatus(request);
+		return new ResponseEntity<Map<String, Object>>(body, status);
+	}
+```
+
+
+
+​	3、ErrorPageCustomizer：
+
+```java
+	@Value("${error.path:/error}")
+	private String path = "/error";  系统出现错误以后来到error请求进行处理；（web.xml注册的错误页面规则）
+```
+
+
+
+​	4、DefaultErrorViewResolver：
+
+```java
+@Override
+	public ModelAndView resolveErrorView(HttpServletRequest request, HttpStatus status,
+			Map<String, Object> model) {
+		ModelAndView modelAndView = resolve(String.valueOf(status), model);
+		if (modelAndView == null && SERIES_VIEWS.containsKey(status.series())) {
+			modelAndView = resolve(SERIES_VIEWS.get(status.series()), model);
+		}
+		return modelAndView;
+	}
+
+	private ModelAndView resolve(String viewName, Map<String, Object> model) {
+        //默认SpringBoot可以去找到一个页面？  error/404
+		String errorViewName = "error/" + viewName;
+        
+        //模板引擎可以解析这个页面地址就用模板引擎解析
+		TemplateAvailabilityProvider provider = this.templateAvailabilityProviders
+				.getProvider(errorViewName, this.applicationContext);
+		if (provider != null) {
+            //模板引擎可用的情况下返回到errorViewName指定的视图地址
+			return new ModelAndView(errorViewName, model);
+		}
+        //模板引擎不可用，就在静态资源文件夹下找errorViewName对应的页面   error/404.html
+		return resolveResource(errorViewName, model);
+	}
+```
+
+
+
+​	步骤：
+
+​		一但系统出现4xx或者5xx之类的错误；ErrorPageCustomizer就会生效（定制错误的响应规则）；就会来到/error请求；就会被**BasicErrorController**处理；
+
+​		1）响应页面；去哪个页面是由**DefaultErrorViewResolver**解析得到的；
+
+```java
+protected ModelAndView resolveErrorView(HttpServletRequest request,
+      HttpServletResponse response, HttpStatus status, Map<String, Object> model) {
+    //所有的ErrorViewResolver得到ModelAndView
+   for (ErrorViewResolver resolver : this.errorViewResolvers) {
+      ModelAndView modelAndView = resolver.resolveErrorView(request, status, model);
+      if (modelAndView != null) {
+         return modelAndView;
+      }
+   }
+   return null;
+}
+```
+
+#### 	2）、如何定制错误的json数据；
+
+​		1）、自定义异常处理&返回定制json数据；
+
+```java
+@ControllerAdvice
+public class MyExceptionHandler {
+
+    @ResponseBody
+    @ExceptionHandler(UserNotExistException.class)
+    public Map<String,Object> handleException(Exception e){
+        Map<String,Object> map = new HashMap<>();
+        map.put("code","user.notexist");
+        map.put("message",e.getMessage());
+        return map;
+    }
+}
+//没有自适应效果...
+```
+
+
+
+​		2）、转发到/error进行自适应响应效果处理
+
+```java
+ @ExceptionHandler(UserNotExistException.class)
+    public String handleException(Exception e, HttpServletRequest request){
+        Map<String,Object> map = new HashMap<>();
+        //传入我们自己的错误状态码  4xx 5xx，否则就不会进入定制错误页面的解析流程
+        /**
+         * Integer statusCode = (Integer) request
+         .getAttribute("javax.servlet.error.status_code");
+         */
+        request.setAttribute("javax.servlet.error.status_code",500);
+        map.put("code","user.notexist");
+        map.put("message",e.getMessage());
+        //转发到/error
+        return "forward:/error";
+    }
+```
+
+#### 	3）、将我们的定制数据携带出去；
+
+出现错误以后，会来到/error请求，会被BasicErrorController处理，响应出去可以获取的数据是由getErrorAttributes得到的（是AbstractErrorController（ErrorController）规定的方法）；
+
+​	1、完全来编写一个ErrorController的实现类【或者是编写AbstractErrorController的子类】，放在容器中；
+
+​	2、页面上能用的数据，或者是json返回能用的数据都是通过errorAttributes.getErrorAttributes得到；
+
+​			容器中DefaultErrorAttributes.getErrorAttributes()；默认进行数据处理的；
+
+自定义ErrorAttributes
+
+```java
+//给容器中加入我们自己定义的ErrorAttributes
+@Component
+public class MyErrorAttributes extends DefaultErrorAttributes {
+
+    @Override
+    public Map<String, Object> getErrorAttributes(RequestAttributes requestAttributes, boolean includeStackTrace) {
+        Map<String, Object> map = super.getErrorAttributes(requestAttributes, includeStackTrace);
+        map.put("company","atguigu");
+        return map;
+    }
+}
+```
+
+最终的效果：响应是自适应的，可以通过定制ErrorAttributes改变需要返回的内容，
+
+![](SpringBoot笔记.assets/搜狗截图20180228135513.png)
+
+
+
+# 六、springboot与数据访问
+
