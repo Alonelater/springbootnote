@@ -1,4 +1,4 @@
-# **一、**Spring Boot 入门
+# 一、Spring Boot 入门
 
 ## 1、回顾什么是SpringBoot
 
@@ -3570,3 +3570,1073 @@ public class MyErrorAttributes extends DefaultErrorAttributes {
 
 # 六、springboot与数据访问
 
+## 1、JDBC
+
+### 1、简介
+
+对于数据访问层，无论是 SQL(关系型数据库) 还是 NOSQL(非关系型数据库)，Spring Boot 底层都是采用 Spring Data 的方式进行统一处理。
+
+Spring Boot 底层都是采用 Spring Data 的方式进行统一处理各种数据库，Spring Data 也是 Spring 中与 Spring Boot、Spring Cloud 等齐名的知名项目。
+
+### 2、搭建项目
+
+1、去新建一个项目测试：springboot-data-jdbc ; 引入相应的模块！基础模块
+
+![img](SpringBoot笔记.assets/640)
+
+2、项目建好之后，发现自动帮我们导入了如下的启动器：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+3、编写yaml配置文件连接数据库；
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+     #?serverTimezone=UTC解决时区的报错 注意serverTimezone中的zone是小写的
+    url: jdbc:mysql://localhost:3306/learn_jdbc?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC
+  devtools:
+    restart:
+      enabled: true #开启热部署
+      additional-paths: src/main/java #重启目录
+      exclude: WEB-INF/**
+  thymeleaf:
+    cache: false #页面不加载缓存，修改即时生效
+```
+
+4、配置完这一些东西后，我们就可以直接去使用了，因为SpringBoot已经默认帮我们进行了自动配置；去测试类测试一下
+
+```java
+package com.springboot04data;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+
+@SpringBootTest
+class Springboot04DataApplicationTests {
+
+
+    //直接注入数据源 因为springboot帮我们自动配置了 所以直接注入
+    @Autowired
+    DataSource dataSource;
+
+    @Test
+    void contextLoads() throws SQLException {
+        System.out.println(dataSource);
+        Connection connection = dataSource.getConnection();
+        System.out.println(connection);
+    }
+
+}
+
+```
+
+结果：我们可以看到他默认给我们配置的数据源为 : class com.zaxxer.hikari.HikariDataSource ， 我们并没有手动配置
+
+我们来全局搜索一下，找到数据源的所有自动配置都在 ：DataSourceAutoConfiguration文件：
+
+```java
+@Configuration(proxyBeanMethods = false)
+@Conditional(PooledDataSourceCondition.class)
+@ConditionalOnMissingBean({ DataSource.class, XADataSource.class })
+@Import({ DataSourceConfiguration.Hikari.class, DataSourceConfiguration.Tomcat.class,
+         DataSourceConfiguration.Dbcp2.class, DataSourceConfiguration.Generic.class,
+         DataSourceJmxConfiguration.class })
+protected static class PooledDataSourceConfiguration {
+
+}
+```
+
+这里导入的类都在 DataSourceConfiguration 配置类下，可以看出 Spring Boot 2.2.5 默认使用HikariDataSource 数据源，而以前版本，如 Spring Boot 1.5 默认使用 org.apache.tomcat.jdbc.pool.DataSource 作为数据源；
+
+**HikariDataSource 号称 Java WEB 当前速度最快的数据源，相比于传统的 C3P0 、DBCP、Tomcat jdbc 等连接池更加优秀；**
+
+**可以使用 spring.datasource.type 指定自定义的数据源类型，值为 要使用的连接池实现的完全限定名。就是类全名**
+
+效果：
+
+​	默认是用com.zaxxer.hikari.HikariDataSource作为数据源；
+
+​	数据源的相关配置都在DataSourceProperties里面；
+
+自动配置原理：
+
+org.springframework.boot.autoconfigure.jdbc：
+
+1、参考DataSourceConfiguration，根据配置创建数据源，默认使用Tomcat连接池；可以使用spring.datasource.type指定自定义的数据源类型；
+
+![image-20200909143650615](SpringBoot笔记.assets/image-20200909143650615.png)
+
+上面我们更改了数据源，我们看看测试出来的是不是也是更改了的
+
+![image-20200909143912496](SpringBoot笔记.assets/image-20200909143912496.png)
+
+### 3、JDBCTemplate
+
+1、有了数据源(com.zaxxer.hikari.HikariDataSource)，然后可以拿到数据库连接(java.sql.Connection)，有了连接，就可以使用原生的 JDBC 语句来操作数据库；
+
+2、即使不使用第三方第数据库操作框架，如 MyBatis等，Spring 本身也对原生的JDBC 做了轻量级的封装，即JdbcTemplate。
+
+3、数据库操作的所有 CRUD 方法都在 JdbcTemplate 中。
+
+4、Spring Boot 不仅提供了默认的数据源，同时默认已经配置好了 JdbcTemplate 放在了容器中，程序员只需自己注入即可使用
+
+5、JdbcTemplate 的自动配置是依赖 org.springframework.boot.autoconfigure.jdbc 包下的 JdbcTemplateConfiguration 类
+
+**JdbcTemplate主要提供以下几类方法：**
+
+- execute方法：可以用于执行任何SQL语句，一般用于执行DDL语句；
+- update方法及batchUpdate方法：update方法用于执行新增、修改、删除等语句；batchUpdate方法用于执行批处理相关语句；
+- query方法及queryForXXX方法：用于执行查询相关语句；
+- call方法：用于执行存储过程、函数相关语句。
+
+#### 测试
+
+编写一个Controller，注入 jdbcTemplate，编写测试方法进行访问测试；
+
+```java
+package com.springboot04data.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.util.List;
+import java.util.Map;
+
+@Controller
+@RequestMapping("/jdbc")
+public class JDBCController {
+
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    //查询employee表中所有数据
+    //List 中的1个 Map 对应数据库的 1行数据
+    //Map 中的 key 对应数据库的字段名，value 对应数据库的字段值
+
+    @RequestMapping("/list")
+    @ResponseBody
+    public List<Map<String, Object>> userList(){
+        String sql = "select * from user";
+        List<Map<String, Object>> maps = jdbcTemplate.queryForList(sql);
+        return maps;
+    }
+
+    //既然查询可以，增删改也应该可以  有时间再试试
+
+    //新增一个用户
+    @GetMapping("/add")
+    @ResponseBody
+    public String addUser(){
+        //插入语句，注意时间问题
+        String sql = "insert into user(user_name,user_password,user_age)" +
+                " values ('小喵','123456',1)";
+        jdbcTemplate.update(sql);
+        //查询
+        return "addOk";
+    }
+
+    //修改用户信息
+    @GetMapping("/update/{userName}")
+    @ResponseBody
+    public String updateUser(@PathVariable("userName") String userName){
+        //插入语句
+        String sql = "update user set user_password=? where user_name=?";
+        //数据
+        Object[] objects = new Object[2];
+        objects[0] = "654321";
+        objects[1] = userName;
+        jdbcTemplate.update(sql,objects);
+        //查询
+        return "updateOk";
+    }
+
+    //删除用户
+    @GetMapping("/delete/{userName}")
+    @ResponseBody
+    public String delUser(@PathVariable("userName") String userName){
+        //插入语句
+        String sql = "delete from user where user_name=?";
+        jdbcTemplate.update(sql,userName);
+        //查询
+        return "deleteOk";
+    }
+
+}
+```
+
+测试请求，结果正常；
+
+到此，CURD的基本操作，使用 JDBC 就搞定了。
+
+## 2、Druid
+
+#### 1、Druid简介
+
+Java程序很大一部分要操作数据库，为了提高性能操作数据库的时候，又不得不使用数据库连接池。
+
+Druid 是阿里巴巴开源平台上一个数据库连接池实现，结合了 C3P0、DBCP 等 DB 池的优点，同时加入了日志监控。
+
+Druid 可以很好的监控 DB 池连接和 SQL 的执行情况，天生就是针对监控而生的 DB 连接池。
+
+Druid已经在阿里巴巴部署了超过600个应用，经过一年多生产环境大规模部署的严苛考验。
+
+Spring Boot 2.0 以上默认使用 Hikari 数据源，可以说 Hikari 与 Driud 都是当前 Java Web 上最优秀的数据源，我们来重点介绍 Spring Boot 如何集成 Druid 数据源，如何实现数据库监控。
+
+[Github地址](https://github.com/alibaba/druid/)
+
+**com.alibaba.druid.pool.DruidDataSource 基本配置参数如下：**
+
+![img](SpringBoot笔记.assets/640-7)
+
+![](SpringBoot笔记.assets/640-9.jpg)
+
+![](SpringBoot笔记.assets/640-8.jpg)
+
+#### 2、配置数据源
+
+```xml
+!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+<dependency>    
+    <groupId>com.alibaba</groupId>    
+    <artifactId>druid</artifactId>
+    <version>1.1.21</version>
+</dependency>
+```
+
+切换数据源；之前已经说过 Spring Boot 2.0 以上默认使用 com.zaxxer.hikari.HikariDataSource 数据源，但可以 通过 spring.datasource.type 指定数据源。
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    #如果报错就是时区问题
+    url: jdbc:mysql://localhost:3306/learn_jdbc?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC
+    #添加制定的数据源
+    type: com.alibaba.druid.pool.DruidDataSource
+```
+
+3、数据源切换之后，在测试类中注入 DataSource，然后获取到它，输出一看便知是否成功切换；
+
+![img](![image-20200909143912496](SpringBoot笔记.assets/image-20200909143912496.png)
+
+4、切换成功！既然切换成功，就可以设置数据源连接初始化大小、最大连接数、等待时间、最小连接数 等设置项；可以查看源码
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/learn_jdbc?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC
+    type: com.alibaba.druid.pool.DruidDataSource
+
+    #Spring Boot 默认是不注入这些属性值的，需要自己绑定  这样绑定是无法生效的 我们还需要将我们这些使用@Confiruration.properties指定为我们现在这个配置文件
+    #druid 数据源专有配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+
+    #配置监控统计拦截的filters，stat:监控统计、log4j：日志记录、wall：防御sql注入
+    #如果允许时报错  java.lang.ClassNotFoundException: org.apache.log4j.Priority
+    #则导入 log4j 依赖即可，Maven 地址：https://mvnrepository.com/artifact/log4j/log4j
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+```
+
+5、导入Log4j 的依赖
+
+```xml
+<!--导入log4j的依赖-->
+<dependency>
+    <groupId>log4j</groupId>
+    <artifactId>log4j</artifactId>
+    <version>1.2.17</version>
+</dependency>
+```
+
+ 6、现在需要程序员自己为 DruidDataSource 绑定全局配置文件中的参数，再添加到容器中，而不再使用 Spring Boot 的自动生成了；我们需要 自己添加 DruidDataSource 组件到容器中，并绑定属性；所以我们创建一个Druid的配置类 让我们刚刚写的上面那些东西生效
+
+```java
+package com.springboot04data.config;
+
+import com.alibaba.druid.pool.DruidDataSource;
+import com.alibaba.druid.support.http.StatViewServlet;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Configuration//标注这个是个配置类
+public class MyDruidConfig  {
+    /*
+     将自定义的 Druid数据源添加到容器中，不再让 Spring Boot 自动创建
+     绑定全局配置文件中的 druid 数据源属性到 com.alibaba.druid.pool.DruidDataSource从而让它们生效
+     @ConfigurationProperties(prefix = "spring.datasource")：作用就是将 全局配置文件中
+     前缀为 spring.datasource的属性值注入到 com.alibaba.druid.pool.DruidDataSource 的同名参数中
+   */
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DruidDataSource druidDataSource(){
+        return new DruidDataSource();
+    }
+   //去测试类中测试一下；看是否成功！
+
+
+
+    //下面查看druid设置的监控功能
+    //配置 Druid 监控管理后台的Servlet；
+//内置 Servlet 容器时没有web.xml文件，所以使用 Spring Boot 的注册 Servlet 方式
+    @Bean
+    public ServletRegistrationBean statViewServlet() {
+        ServletRegistrationBean bean = new ServletRegistrationBean(new StatViewServlet(), "/druid/*");
+
+        // 这些参数可以在 com.alibaba.druid.support.http.StatViewServlet
+        // 的父类 com.alibaba.druid.support.http.ResourceServlet 中找到
+        Map<String, String> initParams = new HashMap<>();
+        initParams.put("loginUsername", "admin"); //后台管理界面的登录账号
+        initParams.put("loginPassword", "123456"); //后台管理界面的登录密码
+
+        //后台允许谁可以访问
+        //initParams.put("allow", "localhost")：表示只有本机可以访问
+        //initParams.put("allow", "")：为空或者为null时，表示允许所有访问
+        initParams.put("allow", "");
+        //deny：Druid 后台拒绝谁访问
+        //initParams.put("kuangshen", "192.168.1.20");表示禁止此ip访问
+
+        //设置初始化参数
+        bean.setInitParameters(initParams);
+        return bean;
+    }
+    //访问http://localhost:8080/druid/login.html  使用上面的登录账号和密码就能看到了
+
+
+}
+```
+
+配置完毕后，我们可以选择访问 ：http://localhost:8080/druid/login.html
+
+![image-20200909155705892](SpringBoot笔记.assets/image-20200909155705892.png)
+
+**配置 Druid web 监控 filter 过滤器**
+
+```java
+//配置 Druid 监控 之  web 监控的 filter
+//WebStatFilter：用于配置Web和Druid数据源之间的管理关联监控统计
+@Bean
+public FilterRegistrationBean webStatFilter() {
+    FilterRegistrationBean bean = new FilterRegistrationBean();
+    bean.setFilter(new WebStatFilter());
+
+    //exclusions：设置哪些请求进行过滤排除掉，从而不进行统计
+    Map<String, String> initParams = new HashMap<>();
+    initParams.put("exclusions", "*.js,*.css,/druid/*,/jdbc/*");
+    bean.setInitParameters(initParams);
+
+    //"/*" 表示过滤所有请求
+    bean.setUrlPatterns(Arrays.asList("/*"));
+    return bean;
+}
+```
+
+## 3、整合mybatis
+
+官方文档：http://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/
+
+Maven仓库地址：https://mvnrepository.com/artifact/org.mybatis.spring.boot/mybatis-spring-boot-starter/2.1.1
+
+#### 1、整合
+
+##### **1)导入 MyBatis 所需要的依赖**
+
+```xml
+<!--导入mybatis整合包的依赖  注意这里的前缀 是mybatis开始的-->
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis-spring-boot-starter</artifactId>
+    <version>2.1.1</version>
+</dependency>
+```
+
+##### **2)配置数据库连接信息（不变）**
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/learn_jdbc?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC
+    type: com.alibaba.druid.pool.DruidDataSource
+
+    #Spring Boot 默认是不注入这些属性值的，需要自己绑定  这样绑定是无法生效的 我们还需要将我们这些使用@Confiruration.properties指定为我们现在这个配置文件
+    #druid 数据源专有配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+
+    #配置监控统计拦截的filters，stat:监控统计、log4j：日志记录、wall：防御sql注入
+    #如果允许时报错  java.lang.ClassNotFoundException: org.apache.log4j.Priority
+    #则导入 log4j 依赖即可，Maven 地址：https://mvnrepository.com/artifact/log4j/log4j
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+    
+#整合mybatis
+mybatis:
+  type-aliases-package: com.springboot04data.pojo #指定别名的位置
+  mapper-locations: classpath:mybatis/mapper/*.xml #指定sql映射文件的位置
+```
+
+##### **3)创建实体类，导入 Lombok！**
+
+ ```xml
+<!--lombok写实体类的-->
+<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+    <optional>true</optional>
+</dependency>
+ ```
+
+注入实体类
+
+```java
+package com.springboot04data.pojo;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data//加载数据的get,set等等
+@NoArgsConstructor//无参构造
+@AllArgsConstructor//全部有参构造
+public class User {
+
+    private String name;
+    private String password;
+    private int age;
+
+}
+```
+
+##### **4)创建mapper目录以及对应的 Mapper 接口**
+
+![image-20200909164128187](SpringBoot笔记.assets/image-20200909164128187.png)
+
+```java
+package com.springboot04data.mapper;
+
+import com.springboot04data.pojo.User;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.type.MappedJdbcTypes;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository//表示dao层的注解
+@Mapper//这个注解表示了这个类就是mybatis的mapper类  或者在主启动类上面借@MapperScan("com.springboot04data.mapper")也行
+public interface UserMapper {
+    List<User> queryList();
+    User queryUserByName();
+    int addUser(User user);
+    int updateUser(User user);
+    int deleteUser(String name);
+}
+```
+
+UserMapper.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.springboot04data.mapper.UserMapper">
+    <!--下面去整个mybatis  就是去yaml配置这些路径-->
+    <select id="queryList" resultType="User">
+        select * from learn_jdbc.user
+    </select>
+    <select id="queryUserByName" parameterType="String" resultType="User">
+        select * from learn_jdbc.user where name=#{name}
+    </select>
+
+    <insert id="addUser" parameterType="User">
+        insert into learn_jdbc.user (name,password,age) values (#{name},#{password},#{age});
+    </insert>
+    
+    <update id="updateUser" parameterType="User">
+        update user set password=#{password},age=#{age} where name =#{name};
+    </update>
+
+    <delete id="deleteUser" parameterType="String">
+        delete from USER  where  name=#{name}
+    </delete>
+</mapper>
+```
+
+![image-20200910085150332](SpringBoot笔记.assets/image-20200910085150332.png)
+
+##### **5、maven配置资源过滤问题**(暂时还未用上)
+
+```xml
+<resources>
+    <resource>
+        <directory>src/main/java</directory>
+        <includes>
+            <include>**/*.xml</include>
+        </includes>
+        <filtering>true</filtering>
+    </resource>
+</resources>
+```
+
+# 七、SpringBootSecurity
+
+## 1、安全简介
+
+在 Web 开发中，安全一直是非常重要的一个方面。安全虽然属于应用的非功能性需求，但是应该在应用开发的初期就考虑进来。如果在应用开发的后期才考虑安全的问题，就可能陷入一个两难的境地：一方面，应用存在严重的安全漏洞，无法满足用户的要求，并可能造成用户的隐私数据被攻击者窃取；另一方面，应用的基本架构已经确定，要修复安全漏洞，可能需要对系统的架构做出比较重大的调整，因而需要更多的开发时间，影响应用的发布进程。因此，从应用开发的第一天就应该把安全相关的因素考虑进来，并在整个应用的开发过程中。
+
+市面上存在比较有名的：Shiro，Spring Security ！
+
+这里需要阐述一下的是，每一个框架的出现都是为了解决某一问题而产生了，那么**Spring Security**框架的出现是为了解决什么问题呢？
+
+首先我们看下它的官网介绍：
+
+Spring Security is a powerful and highly customizable authentication and access-control framework. It is the de-facto standard for securing Spring-based applications.
+
+Spring Security is a framework that focuses on providing both authentication and authorization to Java applications. Like all Spring projects, the real power of Spring Security is found in how easily it can be extended to meet custom requirements
+
+Spring Security是一个功能强大且高度可定制的身份验证和访问控制框架。它实际上是保护基于spring的应用程序的标准。
+
+Spring Security是一个框架，侧重于为Java应用程序提供身份验证和授权。与所有Spring项目一样，Spring安全性的真正强大之处在于它可以轻松地扩展以满足定制需求
+
+从官网的介绍中可以知道这是一个**权限框架**。想我们之前做项目是没有使用框架是怎么控制权限的？对于权限 一般会细分为功能权限，访问权限，和菜单权限。代码会写的非常的繁琐，冗余。
+
+怎么解决之前写权限代码繁琐，冗余的问题，一些主流框架就应运而生而Spring Scecurity就是其中的一种。
+
+Spring 是一个非常流行和成功的 Java 应用开发框架。Spring Security 基于 Spring 框架，提供了一套 Web 应用安全性的完整解决方案。一般来说，Web 应用的安全性包括**用户认证（Authentication）**和**用户授权（Authorization）**两个部分。用户认证指的是验证某个用户是否为系统中的合法主体，也就是说用户能否访问该系统。**用户认证一般要求用户提供用户名和密码**。系统通过校验用户名和密码来完成认证过程。**用户授权指的是验证某个用户是否有权限执行某个操作。**==在一个系统中，不同用户所具有的权限是不同的。比如对一个文件来说，有的用户只能进行读取，而有的用户可以进行修改。一般来说，系统会为不同的用户分配不同的角色，而每个角色则对应一系列的权限。==
+
+对于上面提到的两种应用情景，Spring Security 框架都有很好的支持。在用户认证方面，Spring Security 框架支持主流的认证方式，包括 HTTP 基本认证、HTTP 表单验证、HTTP 摘要认证、OpenID 和 LDAP 等。在用户授权方面，Spring Security 提供了基于角色的访问控制和访问控制列表（Access Control List，ACL），可以对应用中的领域对象进行细粒度的控制。
+
+## 2、认识SpringSecurity
+
+Spring Security 是针对Spring项目的安全框架，也是Spring Boot底层安全模块默认的技术选型，他可以实现强大的Web安全控制，对于安全控制，我们仅需要引入 **spring-boot-starter-security** 模块，进行少量的配置，即可实现强大的安全管理！
+
+记住几个类：
+
+- WebSecurityConfigurerAdapter：自定义Security策略
+- AuthenticationManagerBuilder：自定义认证策略
+- @EnableWebSecurity：开启WebSecurity模式
+
+Spring Security的两个主要目标是 “认证” 和 “授权”（访问控制）。
+
+**“认证”（Authentication）**
+
+身份验证是关于验证您的凭据，如用户名/用户ID和密码，以验证您的身份。
+
+身份验证通常通过用户名和密码完成，有时与身份验证因素结合使用。
+
+ **“授权” （Authorization）**
+
+授权发生在系统成功验证您的身份后，最终会授予您访问资源（如信息，文件，数据库，资金，位置，几乎任何内容）的完全权限。
+
+这个概念是通用的，而不是只在Spring Security 中存在。
+
+## 3、认证和授权
+
+目前，我们的测试环境，是谁都可以访问的，我们使用 Spring Security 增加上认证和授权的功能
+
+1、引入 Spring Security 模块
+
+```xml
+<dependency>
+   <groupId>org.springframework.boot</groupId>
+   <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+```
+
+2、编写 Spring Security 配置类
+
+[参考springbootsecurity官网](https://spring.io/projects/spring-security) 
+
+用来配置我们设定的用户名密码用于认证**“认证”（Authentication）**
+
+搭建环境
+
+![image-20200911165915017](SpringBoot笔记.assets/image-20200911165915017.png)
+
+### **授权**
+
+```java
+package com.springboot05security.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+@EnableWebSecurity // 开启WebSecurity模式
+@Configuration//标注这个是一个配置类
+public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+
+    //这个有三个configure，是重载的  你要看清楚你想用哪个
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+           //定制自己的需求
+        //我们说明首页所有人都可以访问 ，但是level1/level2等等的文件夹下面的具体界面需要不同等级的人才能访问
+        //下面这句话的意思是先注册一个认证请求，然后其中所有的人也就是所有的请求"/"链接的是首页的地址，可以被所有人访问
+        //这个是一个链式编程 要注意
+        http.authorizeRequests()
+                .antMatchers("/").permitAll()
+                .antMatchers("/index.html").permitAll()
+                //这个表示所有/level1/1/下面所有的权限只有是角色是vip1的人才能访问，这里真的是路径控制，不是你的资源位置，要注意
+                .antMatchers("/level/1/**").hasRole("vip1")
+                .antMatchers("/level/2/**").hasRole("vip2")
+                .antMatchers("/level/3/**").hasRole("vip3")
+                .anyRequest().authenticated();//其他的需要授权后访问  就比如即使我现在开启了/aaa请求映射到首页，因为他不在放行的白名单里面他也进不去首页
+ //解释了下面因为没加.anyRequest().authenticated(); 造成/aaa能够映射到首页的情况  注意看
+        
+        //上面是控制了哪些权限可以访问 我们在笔记中可以看到我们的截图
+    }
+}
+```
+
+**测试**
+
+![image-20200911171913320](SpringBoot笔记.assets/image-20200911171913320.png)
+
+上面图片的疑惑已经在上面的代码中解释了，是因为没有加.anyRequest().authenticated(); 造成的认证规则的不完善 
+
+![image-20200911171940674](SpringBoot笔记.assets/image-20200911171940674.png)
+
+### **认证**
+
+```java\
+//认证
+
+
+@Override
+protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+    //认证的方式有很多 一个是内存验证一个是数据库验证，看需求你用哪个 先介绍内存验证
+
+    auth.inMemoryAuthentication()
+            .withUser("miaoyongjin").password("123456").roles("vip2","vip3")
+            .and()//用and连接
+            .withUser("admin").password("123456").roles("vip1","vip2","vip3")
+            .and()
+            .withUser("huangshan").password("123456").roles("vip1");
+}
+```
+
+**测试**
+
+![image-20200911173454394](SpringBoot笔记.assets/image-20200911173454394.png)
+
+用上面的admin登录会显示这个错误是因为我们没有指定编码方式
+
+```java
+package com.springboot05security.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
+
+@EnableWebSecurity // 开启WebSecurity模式
+@Configuration//标注这个是一个配置类
+public class MyWebSecurityConfig extends WebSecurityConfigurerAdapter {
+
+
+
+    //取消密码验证  只不过这个被废弃了这个方法  不建议使用
+    @Bean
+    PasswordEncoder passwordEncoder(){
+        return NoOpPasswordEncoder.getInstance();
+    }
+
+    //授权
+
+    //这个有三个configure，是重载的  你要看清楚你想用哪个
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        //定制自己的需求
+        //我们说明首页所有人都可以访问 ，但是level1/level2等等的文件夹下面的具体界面需要不同等级的人才能访问
+        //下面这句话的意思是先注册一个认证请求，然后其中所有的人也就是所有的请求"/"链接的是首页的地址，可以被所有人访问
+        //这个是一个链式编程 要注意
+        http.authorizeRequests()
+                .antMatchers("/").permitAll()
+                .antMatchers("/index.html").permitAll()
+                //这个表示所有/level1/1/下面所有的权限只有是角色是vip1的人才能访问，这里真的是路径控制，不是你的资源位置，要注意
+                .antMatchers("/level/1/**").hasRole("vip1")
+                .antMatchers("/level/2/**").hasRole("vip2")
+                .antMatchers("/level/3/**").hasRole("vip3")
+                .anyRequest().authenticated();//其他的需要授权后访问  就比如即使我现在开启了/aaa请求映射到首页，因为他不在放行的白名单里面他也进不去首页
+
+
+        //上面是控制了哪些权限可以访问 我们在笔记中可以看到我们的截图
+        //如果没有权限会报403错误，我们也可以让他跳转到springboot默认登陆界面，只要开启就行了
+        //没有权限默认跳到登陆界面
+        // 开启自动配置的登录功能
+        // /login 请求来到登录页
+        // /login?error 重定向到这里表示登录失败
+        http.formLogin();//但是你没有用户名和密码所以就登陆不了所以我们下面添加用户名和密码和角色
+
+
+        //上面已经有了登录请求 下面写注销请求点进去源码我们可以发现我们注销默认发送/logout请求进行在注销功能
+        //开启了注销功能，以及定制注销后去往哪个界面
+        http.csrf().disable();
+        http.logout().logoutSuccessUrl("/aaa");
+    }
+
+
+
+
+    //认证
+
+    //密码编码PasswordEncoder
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        //认证的方式有很多 一个是内存验证一个是数据库验证，看需求你用哪个 先介绍内存验证
+
+        auth.inMemoryAuthentication().passwordEncoder(new BCryptPasswordEncoder())//这里加了密码验证  下面设置密码的时候也要输入相应编码的验证规则
+                .withUser("miaoyongjin").password(new BCryptPasswordEncoder().encode("123456")).roles("vip2","vip3")
+                .and()
+                .withUser("admin").password(new BCryptPasswordEncoder().encode("123456")).roles("vip1","vip2","vip3")
+                .and()
+                .withUser("guest").password(new BCryptPasswordEncoder().encode("123456")).roles("vip1","vip2");
+    }
+
+
+
+
+    //认证
+//
+//    //密码编码PasswordEncoder
+//    @Override
+//    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+//        //认证的方式有很多 一个是内存验证一个是数据库验证，看需求你用哪个 先介绍内存验证
+//
+//        auth.inMemoryAuthentication()//这里取消了验证规则 所以下面的密码也不能使用密码编码
+//                .withUser("miaoyongjin").password("123456").roles("vip2","vip3")
+//                .and()
+//                .withUser("admin").password("123456").roles("vip1","vip2","vip3")
+//                .and()
+//                .withUser("guest").password("123456").roles("vip1","vip2");
+//    }
+}
+
+```
+
+11、测试，发现，登录成功，并且每个角色只能访问自己认证下的规则！搞定
+
+### 注销
+
+1、开启自动配置的注销的功能
+
+```java
+//定制请求的授权规则
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+   //....
+   //开启自动配置的注销的功能
+      // /logout 注销请求
+   http.logout();
+}
+```
+
+2、我们在前端，增加一个注销的按钮，index.html 导航栏中
+
+```html
+<a class="item" th:href="@{/logout}">
+   <i class="address card icon"></i> 注销
+</a>
+```
+
+3、我们可以去测试一下，登录成功后点击注销，发现注销完毕会跳转到登录页面！
+
+4、但是，我们想让他注销成功后，依旧可以跳转到首页，该怎么处理呢？
+
+```java
+// .logoutSuccessUrl("/"); 注销成功来到首页
+http.logout().logoutSuccessUrl("/aaa");
+```
+
+5、测试，注销完毕后，发现跳转到首页OK(也就是我们aaa映射的首页地址)
+
+![image-20200912090928768](SpringBoot笔记.assets/image-20200912090928768.png)
+
+### 权限控制
+
+我们现在又来一个需求：用户没有登录的时候，导航栏上只显示登录按钮，用户登录之后，导航栏可以显示登录的用户信息及注销按钮！还有就是，比如miaoyongjin这个用户，它只有 vip2，vip3功能，那么登录则只显示这两个功能，而vip1的功能菜单不显示！这个就是真实的网站情况了！该如何做呢？
+
+**我们需要结合thymeleaf中的一些功能**
+
+sec：authorize="isAuthenticated()":是否认证登录！来显示不同的页面
+
+Maven依赖：
+
+```xml
+<!-- https://mvnrepository.com/artifact/org.thymeleaf.extras/thymeleaf-extras-springsecurity4 -->
+<dependency>
+   <groupId>org.thymeleaf.extras</groupId>
+   <artifactId>thymeleaf-extras-springsecurity5</artifactId>
+   <version>3.0.4.RELEASE</version>
+</dependency>
+```
+
+更改界面
+
+```html
+<!DOCTYPE html>
+<!--导入thymeleaf和security的整合包的命名空间-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<h1>index</h1>
+<!--如果没登录 就显示登录-->
+<div sec:authorize="!isAuthenticated()">
+    <a th:href="@{/login}">登录</a>
+</div>
+<!--如果登录了就显示注销-->
+
+<a th:href="@{/logout}" sec:authorize="isAuthenticated()">注销</a>
+<div>
+
+
+    level1
+    <p><a th:href="@{/level/1/1}">level1-1</a></p>
+    <p><a th:href="@{/level/1/2}">level1-2</a></p>
+    <p><a th:href="@{/level/1/3}">level1-3</a></p>
+</div>
+<div>
+    level2
+    <p><a th:href="@{/level/2/1}">level2-1</a></p>
+    <p><a th:href="@{/level/2/2}">level2-2</a></p>
+    <p><a th:href="@{/level/2/3}">level2-3</a></p>
+</div>
+<div>
+    level3
+    <p><a th:href="@{/level/3/1}">level3-1</a></p>
+    <p><a th:href="@{/level/3/2}">level3-2</a></p>
+    <p><a th:href="@{/level/3/3}">level3-3</a></p>
+</div>
+</body>
+</html>
+```
+
+如果注销404了，就是因为它默认防止csrf跨站请求伪造，因为会产生安全问题，我们可以将请求改为post表单提交，或者在spring security中关闭csrf功能；我们试试：在 配置中增加 `http.csrf().disable();`
+
+```
+http.csrf().disable();//关闭csrf功能:跨站请求伪造,默认只能通过post方式提交logout请求
+```
+
+经过测试已经实现了用户登录就显示注销，没登录就显示登录，接下来实现用户是什么权限就能看到什么权限的菜单
+
+再修改界面
+
+```html
+<!DOCTYPE html>
+<!--导入thymeleaf和security的整合包的命名空间-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<h1>index</h1>
+<!--如果没登录 就显示登录-->
+<div sec:authorize="!isAuthenticated()">
+    <a th:href="@{/login}">登录</a>
+</div>
+<!--如果登录了就显示注销-->
+<div sec:authorize="isAuthenticated()">
+    <a th:href="@{/logout}" >注销</a>
+</div>
+<div sec:authorize="hasRole('vip1')">
+    level1
+    <p><a th:href="@{/level/1/1}">level1-1</a></p>
+    <p><a th:href="@{/level/1/2}">level1-2</a></p>
+    <p><a th:href="@{/level/1/3}">level1-3</a></p>
+</div>
+<div sec:authorize="hasRole('vip2')">
+    level2
+    <p><a th:href="@{/level/2/1}">level2-1</a></p>
+    <p><a th:href="@{/level/2/2}">level2-2</a></p>
+    <p><a th:href="@{/level/2/3}">level2-3</a></p>
+</div>
+<div sec:authorize="hasRole('vip3')">
+    level3
+    <p><a th:href="@{/level/3/1}">level3-1</a></p>
+    <p><a th:href="@{/level/3/2}">level3-2</a></p>
+    <p><a th:href="@{/level/3/3}">level3-3</a></p>
+</div>
+</body>
+</html>
+```
+
+最后效果就能如下图所示了
+
+1、没有任何用户登录时
+
+
+
+![image-20200912100303348](SpringBoot笔记.assets/image-20200912100303348.png)
+
+登录guest用户时
+
+![image-20200912100644598](SpringBoot笔记.assets/image-20200912100644598.png)权限控制和注销搞定！
+
+### 记住我
+
+现在的情况，我们只要登录之后，关闭浏览器，再登录，就会让我们重新登录，但是很多网站的情况，就是有一个记住密码的功能，这个该如何实现呢？很简单
+
+1、开启记住我功能
+
+```
+//定制请求的授权规则
+@Override
+protected void configure(HttpSecurity http) throws Exception {
+//。。。。。。。。。。。
+   //记住我
+   http.rememberMe();
+}
+```
+
+2、我们再次启动项目测试一下，发现登录页多了一个记住我功能，我们登录之后关闭 浏览器，然后重新打开浏览器访问，发现用户依旧存在！
+
+思考：如何实现的呢？其实非常简单
+
+我们可以查看浏览器的cookie
+
+3、我们点击注销的时候，可以发现，spring security 帮我们自动删除了这个 cookie
+
+4、结论：登录成功后，将cookie发送给浏览器保存，以后登录带上这个cookie，只要通过检查就可以免登录了。如果点击注销，则会删除这个cookie，具体的原理我们在JavaWeb阶段都讲过了，这里就不在多说了
+
+### 定制登录页
+
+现在这个登录页面都是spring security 默认的，怎么样可以使用我们自己写的Login界面呢？
+
+1、在刚才的登录页配置后面指定 loginpage
+
+```java
+http.formLogin().loginPage("/toLogin");
+```
+
+2、然后前端也需要指向我们自己定义的 login请求
+
+```html
+<a class="item" th:href="@{/toLogin}">
+   <i class="address card icon"></i> 登录
+</a>
+```
+
+3、我们登录，需要将这些信息发送到哪里，我们也需要配置，login.html 配置提交请求及方式，方式必须为post:
+
+在 loginPage()源码中的注释上有写明：
+
+![](SpringBoot笔记.assets/640-10)
+
+```html
+<form th:action="@{/login}" method="post">
+   <div class="field">
+       <label>Username</label>
+       <div class="ui left icon input">
+           <!--记住这里的name属性的值一定要和后台接受的一样 默认是用username和password，如果不一样一定要手动指定-->
+           <input type="text" placeholder="Username" name="username">
+           <i class="user icon"></i>
+       </div>
+   </div>
+   <div class="field">
+       <label>Password</label>
+       <div class="ui left icon input">
+           <input type="password" name="password">
+           <i class="lock icon"></i>
+       </div>
+   </div>
+   <input type="submit" class="ui blue submit button"/>
+</form>
+```
+
+4、这个请求提交上来，我们还需要验证处理，怎么做呢？我们可以查看formLogin()方法的源码！我们配置接收登录的用户名和密码的参数！
+
+```java
+http.formLogin()
+  .usernameParameter("username")//和表单提交的name属性一定要一致
+  .passwordParameter("password")//和表单提交的name属性一定要一致
+  .loginPage("/toLogin")
+  .loginProcessingUrl("/login"); // 登陆表单提交请求
+```
+
+5、在登录页增加记住我的多选框
+
+```
+<input type="checkbox" name="remember"> 记住我
+```
+
+6、后端验证处理！
+
+```java
+//定制记住我的参数！
+http.rememberMe().rememberMeParameter("remember");
+```
+
+7、测试，OK
