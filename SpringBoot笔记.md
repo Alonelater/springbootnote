@@ -2024,7 +2024,7 @@ private Resource getIndexHtml(String location) {
 
 根据上面的源码显示我们要展示任何一个首页 只要将它放在自定义的路径下或者资源目录下 资源目录就是上面讲的那几个static resources public都行
 
-**==注意==**：即使我们将index.html放在那几个文件夹下面通过首页控制器还是会报404错误的，那是因为我们没有配置
+**==注意==**：即使我们将index.html放在那几个文件夹下面通过首页控制器还是会报404错误的，那是因为我们没有配置模板引擎
 
 ### 1、引入thymeleaf模板引擎
 
@@ -3826,6 +3826,11 @@ Spring Boot 2.0 以上默认使用 Hikari 数据源，可以说 Hikari 与 Driud
     <artifactId>druid</artifactId>
     <version>1.1.21</version>
 </dependency>
+<dependency>
+    <groupId>log4j</groupId>
+    <artifactId>log4j</artifactId>
+    <version>1.2.17</version>
+</dependency>
 ```
 
 切换数据源；之前已经说过 Spring Boot 2.0 以上默认使用 com.zaxxer.hikari.HikariDataSource 数据源，但可以 通过 spring.datasource.type 指定数据源。
@@ -4025,7 +4030,7 @@ spring:
     #配置监控统计拦截的filters，stat:监控统计、log4j：日志记录、wall：防御sql注入
     #如果允许时报错  java.lang.ClassNotFoundException: org.apache.log4j.Priority
     #则导入 log4j 依赖即可，Maven 地址：https://mvnrepository.com/artifact/log4j/log4j
-    filters: stat,wall,log4j
+    filters: stat,wall,log4j  	
     maxPoolPreparedStatementPerConnectionSize: 20
     useGlobalDataSourceStat: true
     connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
@@ -4593,7 +4598,7 @@ http.formLogin().loginPage("/toLogin");
 
 在 loginPage()源码中的注释上有写明：
 
-![](SpringBoot笔记.assets/640-10)
+![](SpringBoot笔记.assets/640-10.jpg)
 
 ```html
 <form th:action="@{/login}" method="post">
@@ -4640,3 +4645,622 @@ http.rememberMe().rememberMeParameter("remember");
 ```
 
 7、测试，OK
+
+下面介绍另外一个安全框架**shiro** 
+
+## 4、Shiro
+
+#### 简介
+
+**Apache Shiro™**是一个功能强大且易于使用的Java安全框架，它执行身份验证，授权，加密和会话管理。使用Shiro易于理解的API，您可以快速轻松地保护任何应用程序-从最小的移动应用程序到最大的Web和企业应用程序。
+
+三个核心组件：**Subject**, **SecurityManager** 和 **Realms**.
+
+​	**Subject**：即“当前操作用户”。但是，在Shiro中，Subject这一概念并不仅仅指人，也可以是第三方进程、后台帐户（Daemon Account）或其他类似事物。它仅仅意味着“当前跟软件交互的东西”。
+　　**Subject**代表了当前**用户**的安全操作，**SecurityManager**则**管理**所有**用户**的安全操作。
+　　SecurityManager：它是Shiro框架的核心，典型的Facade模式，Shiro通过SecurityManager来管理内部组件实例，并通过它来提供安全管理的各种服务。
+　　Realm： Realm充当了Shiro与应用安全数据间的“桥梁”或者“连接器”。也就是说，当对用户执行认证（登录）和授权（访问控制）验证时，Shiro会从应用配置的Realm中查找用户及其权限信息。
+　　从这个意义上讲，Realm实质上是一个安全相关的DAO：它封装了数据源的连接细节，并在需要时将相关数据提供给Shiro。当配置Shiro时，你必须至少指定一个Realm，用于认证和（或）授权。配置多个Realm是可以的，但是至少需要一个。
+　　Shiro内置了可以连接大量安全数据源（又名目录）的Realm，如LDAP、关系数据库（JDBC）、类似INI的文本配置资源以及属性文件等。如果缺省的Realm不能满足需求，你还可以插入代表自定义数据源的自己的Realm实现。
+
+#### 创建QuickStart
+
+1）10分钟快速入门的[shiro快速入门](http://shiro.apache.org/10-minute-tutorial.html)从github官网下载shiro的快速入门的pom依赖[github的依赖](https://github.com/apache/shiro) 
+
+这个时候是直接创建一个java项目  不用创建那个springboot项目
+
+```xml
+<!--导入shiro相关包-->
+
+<dependency>
+    <groupId>org.apache.shiro</groupId>
+    <artifactId>shiro-core</artifactId>
+    <version>1.6.0</version>
+</dependency>
+
+<!-- configure logging -->
+<dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>jcl-over-slf4j</artifactId>
+    <version>1.7.21</version>
+</dependency>
+<dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-log4j12</artifactId>
+    <version>1.7.21</version>
+</dependency>
+<dependency>
+    <groupId>log4j</groupId>
+    <artifactId>log4j</artifactId>
+    <version>1.2.17</version>
+</dependency>
+<!--结束-->
+```
+
+2)然后将sample/quickstart中的资源文件和QuickStart.java文件丢在里面就行了就可以启动了（效果如下）
+
+![image-20200922113116166](SpringBoot笔记.assets/image-20200922113116166.png)
+
+#### 整合springboot和shiro
+
+1）导入依赖
+
+```xml
+<!--导入springboot和shiro的整个依赖 核心是shiro-spring 一定要导入这个 不要导入启动器 导入启动器无限次进去login.jsp -->
+<dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot</artifactId>
+</dependency>
+<!--导入web模块包-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-devtools</artifactId>
+    <scope>runtime</scope>
+    <optional>true</optional>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-configuration-processor</artifactId>
+    <optional>true</optional>
+</dependency>
+<dependency>
+    <groupId>org.projectlombok</groupId>
+    <artifactId>lombok</artifactId>
+    <optional>true</optional>
+</dependency>
+```
+
+2）搭建测试环境
+
+![image-20200922144600437](SpringBoot笔记.assets/image-20200922144600437.png)
+
+3）设置跳转路径
+
+```java
+package com.springboot06shiro.controller;
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+public class MyController {
+
+
+
+    @RequestMapping({"/","/index"})
+    public  String index() {
+        return "index";
+    }
+    @RequestMapping("/user/add")
+    public  String add() {
+        return "user/add";
+    }
+    @RequestMapping({"/user/update"})
+    public  String update() {
+        return "/user/update";
+    }
+    
+}
+
+```
+
+4）规范权限（必须认证后才能访问add 和update界面 设置过滤链等等开始认证）
+
+上面讲了有三个核心的组件**Subject**, **SecurityManager** 和 **Realms**.
+
+下面一个个来
+
+再附上shiro角色的相关说明
+
+1. Subject：主体，一般指用户。
+
+2. SecurityManager：安全管理器，管理所有Subject，可以配合内部安全组件。(类似于SpringMVC中的DispatcherServlet)
+
+3. Realms：用于进行权限信息的验证，一般需要自己实现。
+
+细分
+
+1. Authentication：身份认证/登录(账号密码验证)。
+
+2. Authorization：授权，即角色或者权限验证。
+
+3. Session Manager：会话管理，用户登录后的session相关管理。
+
+4. Cryptography：加密，密码加密等。
+
+5. Web Support：Web支持，集成Web环境。
+
+6. Caching：缓存，用户信息、角色、权限等缓存到如redis等缓存中。
+
+7. Concurrency：多线程并发验证，在一个线程中开启另一个线程，可以把权限自动传播过去。
+
+8. Testing：测试支持；
+
+9. Run As：允许一个用户假装为另一个用户（如果他们允许）的身份进行访问。
+
+10. Remember Me：记住我，登录后，下次再来的话不用登录了。
+
+5)自定义realm (一定要继承那个AuthorizingRealm)重写认证和授权的方法
+
+```java
+package com.springboot06shiro.config;
+
+import org.apache.shiro.authc.*;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+
+//自定义的用户Realm 一定要继承那个AuthorizingRealm
+public class UserRealm extends AuthorizingRealm {
+
+
+
+//    注意两个方法是不同的  是有区别的 只是单词长得像而已 
+    											//doGetAuthorizationInfo   这两个单词不一样
+												//doGetAuthenticationInfo
+    //授权
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("授权");
+        return null;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        System.out.println("认证");
+        return null;
+        
+    }
+}
+```
+
+定义认证规则（必须登录才能进入add 和update界面  就是下面写的）
+
+```java
+package com.springboot06shiro.config;
+
+import org.apache.shiro.spring.web.ShiroFilterFactoryBean;
+import org.apache.shiro.web.mgt.DefaultWebSecurityManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+@Configuration//标注这个是一个配置类 一定要加上  不然下面的@Bean 没用
+public class ShiroConfig {
+
+    //创建realm对象  需要自定义类
+    @Bean
+    public UserRealm userRealm(){
+        return new UserRealm();
+    }
+    
+    
+    //创建DefaultWebSecurityManager创建shiro安全管理器 管理所有的realm对象    需要用到上面创建的realm对象
+    @Bean
+    public DefaultWebSecurityManager defaultWebSecurityManager(){
+        DefaultWebSecurityManager securityManager = new DefaultWebSecurityManager();
+        //关联realm对象
+        securityManager.setRealm(userRealm());
+
+
+        return securityManager;
+    }
+
+    //设置shiro的拦截  管理所有的secutrityManager
+    @Bean
+    public ShiroFilterFactoryBean shiroFilterFactoryBean(){
+        ShiroFilterFactoryBean bean = new ShiroFilterFactoryBean();
+        bean.setSecurityManager(defaultWebSecurityManager());
+
+        /**
+         *
+         * anon 无需认证就可以访问
+         * authc 必须认证了才能访问
+         * user 必须拥有记住我才能访问
+         * perms 拥有对某个资源的权限访问
+         * role 拥有某个角色权限才能访问
+         *
+         *
+         *
+         */
+
+
+        //添加shiro的内置过滤器链  需要传入一个map
+        Map<String, String> filterChainDefinitionMap = new LinkedHashMap<>();
+
+        //必须认证才能访问这两个资源 规则写在上面 已经测试生效了
+        filterChainDefinitionMap.put("/user/add","authc");
+        filterChainDefinitionMap.put("/user/update","authc");
+        bean.setFilterChainDefinitionMap(filterChainDefinitionMap);
+
+        //当验证不通过时通过url请求跳转到我们自己写的登录页面
+        bean.setLoginUrl("/toLogin");
+
+
+        return bean;
+    }
+}
+```
+
+![image-20200922150419760](SpringBoot笔记.assets/image-20200922150419760.png)
+
+7）设置用户名和密码
+
+```java
+package com.springboot06shiro.controller;
+
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.IncorrectCredentialsException;
+import org.apache.shiro.authc.UnknownAccountException;
+import org.apache.shiro.authc.UsernamePasswordToken;
+import org.apache.shiro.subject.Subject;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+public class MyController {
+
+
+
+    @RequestMapping({"/","/index"})
+    public  String index() {
+        return "index";
+    }
+    @RequestMapping("/user/add")
+    public  String add() {
+        return "user/add";
+    }
+    @RequestMapping({"/user/update"})
+    public  String update() {
+        return "/user/update";
+    }
+    @RequestMapping({"/toLogin"})
+    public  String toLogin() {
+        return "login";
+    }
+
+    
+    //首先获得前台用户输入的用户名和密码  
+    @RequestMapping({"/login"})
+    public String toLogin(String username, String password, Model model) {
+        //获得当前用户
+        Subject subject = SecurityUtils.getSubject();
+        //通过用户名和密码获得令牌
+        UsernamePasswordToken token = new UsernamePasswordToken(username,password);
+        //执行登录
+        try {
+            //尝试登陆 这个时候会走我们自定义的UserRealm的认证阶段   失败会有提示 成功就访问首页
+            subject.login(token);
+            return "index";
+        }catch (UnknownAccountException e){
+            model.addAttribute("msg","用户名错误");
+            return "login";
+        }catch (IncorrectCredentialsException e){
+            model.addAttribute("msg","密码错误");
+            return "login";
+
+        }catch (AuthenticationException e){
+            model.addAttribute("msg","登录有误");
+            return "login";
+
+        }
+
+    }
+
+
+
+
+}
+```
+
+```java
+package com.springboot06shiro.config;
+
+import org.apache.shiro.authc.*;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+
+//自定义的用户Realm
+public class UserRealm extends AuthorizingRealm {
+
+
+
+//    注意两个方法是不同的  是有区别的 只是单词长得像而已
+
+    //授权
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("授权");
+        return null;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+
+
+        System.out.println("认证");
+
+
+        //假设数据库中的登录的密码是如下的root 和123456
+        String username = "root";
+        String password = "123456";
+        //拿到全局对象authenticationToken  其实就是令牌 将它装换成身份认证令牌 拿到我们刚刚得到的用户名和密码制作的令牌用来和我们写死的数据库进行比对错误拿到相应提示 正确就直接访问index了
+        UsernamePasswordToken token = (UsernamePasswordToken)authenticationToken;
+        if (!token.getUsername().equals(username)){
+            //会抛出异常  
+            return null;
+        }
+
+        //要选择这个对象 上面那个是一个接口 选择这个实现类返回
+        return new SimpleAuthenticationInfo("",password,"");
+    }
+}
+```
+
+测试
+
+![image-20200922151246215](SpringBoot笔记.assets/image-20200922151246215.png)
+
+由于上面已经实现了写死密码  下面我们尝试连接数据库 获得真正用户的登录等等
+
+就是实现整合mybatis 和druid数据源 还有整合shiro 
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.3.4.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com</groupId>
+    <artifactId>springboot06-shiro</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>springboot06-shiro</name>
+    <description>Demo project for Spring Boot</description>
+
+    <properties>
+        <java.version>1.8</java.version>
+    </properties>
+
+    <dependencies>
+
+
+
+        <!--导入springboot和shiro的整个依赖 核心是shiro-spring 一定要导入这个 不要导入启动器 导入启动器无限次进去login.jsp -->
+        <dependency>
+            <groupId>org.apache.shiro</groupId>
+            <artifactId>shiro-spring</artifactId>
+            <version>1.4.0</version>
+        </dependency>
+
+        <!--导入thymeleaf-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+        <!--导入web模块包-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--热部署-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <!--yaml的提示-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!--导入mybatis整合包的依赖  注意这里的前缀 是mybatis开始的-->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+        <!--导入数据库的依赖 和驱动-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!--导入数据源的依赖-->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid</artifactId>
+            <version>1.1.21</version>
+        </dependency>
+        <!--配合着数据源的使用-->
+        <dependency>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+            <version>1.2.17</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+```
+
+```yaml
+spring:
+  datasource:
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/learn_jdbc?useUnicode=true&characterEncoding=utf-8&serverTimezone=UTC
+    type: com.alibaba.druid.pool.DruidDataSource
+
+    #Spring Boot 默认是不注入这些属性值的，需要自己绑定  这样绑定是无法生效的 我们还需要将我们这些使用@Confiruration.properties指定为我们现在这个配置文件
+    #druid 数据源专有配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+
+    #配置监控统计拦截的filters，stat:监控统计、log4j：日志记录、wall：防御sql注入
+    #如果允许时报错  java.lang.ClassNotFoundException: org.apache.log4j.Priority
+    #则导入 log4j 依赖即可，Maven 地址：https://mvnrepository.com/artifact/log4j/log4j
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+mybatis:
+  mapper-locations: classpath:mybatis/mapper/*.xml
+  type-aliases-package: com.springboot06shiro.pojo
+```
+
+```java
+package com.springboot06shiro.config;
+
+import com.springboot06shiro.pojo.User;
+import com.springboot06shiro.service.UserSevice;
+import org.apache.shiro.authc.*;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.springframework.beans.factory.annotation.Autowired;
+
+//自定义的用户Realm
+public class UserRealm extends AuthorizingRealm {
+
+
+
+    @Autowired
+    public UserSevice userSevice;
+
+
+//    注意两个方法是不同的  是有区别的 只是单词长得像而已
+
+    //授权
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("授权");
+        return null;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+
+
+        System.out.println("认证");
+
+//
+//        //假设数据库中的登录的密码是如下的root 和123456
+//        String username = "root";
+//        String password = "123456";
+//
+//
+        //拿到全局对象authenticationToken  其实就是令牌 将它装换成身份认证令牌 拿到我们刚刚得到的用户名和密码制作的令牌用来和我们写死的数据库进行比对错误拿到相应提示 正确就直接访问index了
+        UsernamePasswordToken token = (UsernamePasswordToken)authenticationToken;
+//        if (!token.getUsername().equals(username)){
+//            //会抛出异常
+//            return null;
+//        }
+
+        User user = userSevice.queryUserByName(token.getUsername());
+
+        //如果为空 就返回
+        if (null==user){
+            return null;
+        }
+        //要选择这个对象 上面那个是一个接口 选择这个实现类返回
+        return new SimpleAuthenticationInfo("",user.getPassword(),"");
+    }
+}
+```
+
