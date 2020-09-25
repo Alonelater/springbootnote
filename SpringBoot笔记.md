@@ -5264,3 +5264,142 @@ public class UserRealm extends AuthorizingRealm {
 }
 ```
 
+下面设置开启角色权限的授权与认证  就是某个用户拥有某个资源权限才能访问相应的资源
+
+比如admin这个角色他再点击add的时候要去验证他有没有这个资源权限 没有就不让他操作  实现思路是对/user/add进行拦截处理 添加perms[user:add]这个权限 如果没有就执行未授权方法跳转请求
+
+![image-20200925141917111](SpringBoot笔记.assets/image-20200925141917111.png)
+
+```java
+//授权  没有授权的话就会跳转到未授权界面  这个下面的意思就是说/user/add的路径只有你有user:add这个权限的人才能访问
+//顺序问题会影响这个代码 你要是把下面这行代码放在上面上两句话就不能拦截成功了  我们设置好了拦截规则 接下来就是认证了
+filterChainDefinitionMap.put("/user/add","perms[user:add]");
+filterChainDefinitionMap.put("/user/update","perms[user:update]");
+        //设置未授权的跳转界面
+bean.setUnauthorizedUrl("/unauthorized");
+```
+
+在controller里面设置路由路径 我们这里直接返回字符串 方便 
+
+```java
+@RequestMapping({"/unauthorized"})
+@ResponseBody
+public  String unauthorized() {
+    return "未经授权不能访问";
+}
+```
+
+点击Add  由于没有权限 效果如下
+
+![image-20200925142210522](SpringBoot笔记.assets/image-20200925142210522.png)
+
+点击Update 由于没有设置资源权限 可以直接访问
+
+![image-20200925142229692](SpringBoot笔记.assets/image-20200925142229692.png)
+
+规则已经设计好了 接下来就是授权  说白了就是去比较什么时候就是有user:add这个权限的  
+
+好下面直接上代码和效果图
+
+```java
+package com.springboot06shiro.config;
+
+import com.springboot06shiro.mapper.UserMapper;
+import com.springboot06shiro.pojo.User;
+import com.springboot06shiro.service.UserSevice;
+import jdk.nashorn.internal.codegen.SpillObjectCreator;
+import org.apache.shiro.SecurityUtils;
+import org.apache.shiro.authc.*;
+import org.apache.shiro.authz.AuthorizationInfo;
+import org.apache.shiro.authz.SimpleAuthorizationInfo;
+import org.apache.shiro.realm.AuthorizingRealm;
+import org.apache.shiro.subject.PrincipalCollection;
+import org.apache.shiro.subject.Subject;
+import org.springframework.beans.factory.annotation.Autowired;
+
+//自定义的用户Realm
+public class UserRealm extends AuthorizingRealm {
+
+
+
+    @Autowired
+    public UserSevice userSevice;
+
+
+//    注意两个方法是不同的  是有区别的 只是单词长得像而已
+
+    //授权
+    @Override
+    protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
+        System.out.println("授权");
+
+        //前面设置了拦截的资源权限 现在我们就来告诉shiro怎么样算是有这user:add权限的  比如我从数据库中的每个用户的判断roles这个字段是否还有user:add这个字符串的值
+        //如果有就是当做该用户拥有这个角色权限 此时我们就给与这个用户该user:add权限
+        //注意类的名字 是SimpleAuthorizationInfo
+        SimpleAuthorizationInfo info = new SimpleAuthorizationInfo();
+        //添加权限  这里我们判断一下这个用户
+        //先拿到当前的登录对象
+        Subject subject = SecurityUtils.getSubject();
+        //因为我们在下面的new SimpleAuthenticationInfo 传入了一个user 在这里就接收就行了
+        User user = (User) subject.getPrincipal();
+        if (user!=null){
+            //判断用户是否拥有这个权限 有就添加上这个权限 没有就没有  只有这样  才能有什么权限就做什么事
+            //由于用户的权限可能不只是一个  所以我们默认存储在数据库是这样存储的 user:add,user:update 那我们就需要对着权限进行拆分
+            String[] split = user.getRoles().split(",");
+            for (String s : split) {
+                if ("user:add".equals(s)){
+                    info.addStringPermission("user:add");
+                }
+                if ("user:update".equals(s)){
+                    info.addStringPermission("user:update");
+                }
+            }
+
+        }
+
+
+
+        return info;
+    }
+
+    //认证
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+
+
+        System.out.println("认证");
+
+//
+//        //假设数据库中的登录的密码是如下的root 和123456
+//        String username = "root";
+//        String password = "123456";
+//
+//
+        //拿到全局对象authenticationToken  其实就是令牌 将它装换成身份认证令牌 拿到我们刚刚得到的用户名和密码制作的令牌用来和我们写死的数据库进行比对错误拿到相应提示 正确就直接访问index了
+        UsernamePasswordToken token = (UsernamePasswordToken)authenticationToken;
+//        if (!token.getUsername().equals(username)){
+//            //会抛出异常
+//            return null;
+//        }
+
+        User user = userSevice.queryUserByName(token.getUsername());
+
+        if (null==user){
+            return null;
+        }
+        //要选择这个对象 上面那个是一个接口 选择这个实现类返回  其中第一个参数是选择是否将第一个当前的用户作为待会儿授权是够能够得到的信息  这里传了一个user待会儿我们去
+        //授权界面直接通过当前用户拿到就行了  ()
+        return new SimpleAuthenticationInfo(user,user.getPassword(),"");
+    }
+}
+```
+
+主要就是在上面的授权 代码  下面贴上数据库的字段和数据 方便看下面的效果图
+
+![image-20200925150904010](SpringBoot笔记.assets/image-20200925150904010.png)
+
+效果图
+
+![image-20200925151015922](SpringBoot笔记.assets/image-20200925151015922.png)
+
+![image-20200925151130496](SpringBoot笔记.assets/image-20200925151130496.png)
