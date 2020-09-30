@@ -5403,3 +5403,268 @@ public class UserRealm extends AuthorizingRealm {
 ![image-20200925151015922](SpringBoot笔记.assets/image-20200925151015922.png)
 
 ![image-20200925151130496](SpringBoot笔记.assets/image-20200925151130496.png)
+
+# 八、自定义Starter
+
+接下来我们来学习 怎么定义一个自己的Starter  能够让别人也来使用我们自定义的东西
+
+首先我们先明确一个概念 我们的starter 就是一个maven坐标  就是用来提供这个starter下面的自动配置类的坐标 有了他就有了其他的东西
+
+所以我们先创建一个空项目 勾选maven工程 创建好了模块就不管了 直接引入这个starter启动要添加的自动配置类的坐标即可
+
+步骤：
+
+## 1）、引入启动器模块
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.vanward.starter</groupId>
+    <artifactId>mystarter-spring-boot-starter</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+
+
+
+    <!--这个就是一个启动器 我们只是需要引入他的配置模块 这个配置模块mystarter-spring-boot-autoconfigurer-->
+    <dependencies>
+        <dependency>
+            <groupId>com.vanward.starter</groupId>
+            <artifactId>mystarter-spring-boot-autoconfigurer</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
+</project>
+```
+
+## 2）创建自动配置类及其他相关类
+
+接下来创建一个spring-boot项目 
+
+创建服务类 还有服务类使用到的基础类 配置文件 自动配置类
+
+### 创建属性类
+
+```java
+package com.vanward.starter.service;
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix ="vanward.hello")
+public class HelloProperties {
+
+    private String prefix="你好";
+    private String suffix="世界";
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
+    }
+
+    public String getSuffix() {
+        return suffix;
+    }
+
+    public void setSuffix(String suffix) {
+        this.suffix = suffix;
+    }
+}
+```
+
+### 创建服务类 
+
+这个服务类就是以后要帮我们做事的工具类 里面有很多他写好的方法 但是需要我们注入一个属性类
+
+```java
+package com.vanward.starter.service;
+
+public class HelloService {
+
+
+
+	//添加一个属性类 这个属性类需要被注入
+    private  HelloProperties helloProperties;
+
+    public HelloProperties getHelloProperties() {
+        return helloProperties;
+    }
+
+    public void setHelloProperties(HelloProperties helloProperties) {
+        this.helloProperties = helloProperties;
+    }
+
+    //定义一个方法 帮我们做事
+    public String sayHelloService(String name){
+
+        return helloProperties.getPrefix()+"==="+name+"==="+helloProperties.getSuffix();
+    }
+}
+```
+
+### 创建自动配置类
+
+```java
+package com.vanward.starter.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration//标注这个是一个配置类
+@ConditionalOnWebApplication//标注这是web环境才生效
+@EnableConfigurationProperties(HelloProperties.class)//让属性文件生效 所以我们可以直接用  相当于我们的属性文件上面的注解@ConfigurationProperties标注可以在这里直接从容器中拿到 我们就能直接使用@AutoWired使用了  然后将它交给我们的工具HelloService类进行使用 就不会造成HelloService空指针什么的了  
+public class HelloServiceAutoConfiguration {
+
+
+    //直接获得HelloProperties
+    @Autowired
+    HelloProperties helloProperties;
+
+    //我们需要一个HelloService 所以我们直接注入进来
+
+    @Bean
+    public HelloService helloService(){
+        //其中 HelloService又需要一个HelloProperties 所以我们直接在上面增加一个属性文件生效的注解@EnableConfigurationProperties(HelloProperties.class)
+        HelloService service = new HelloService();
+        service.setHelloProperties(helloProperties);
+        return service;
+    }
+
+
+
+    //上面该有的属性文件已经有了  接下来就是将这个我们自己学的自动配置类 交给springboot去管理 叫他帮我们自动装配 就要遵循规则 放在resources下面的META-INF下面的spring.factories
+    //其实我们可以参考mybatis的启动器 因为他也是整个进去的
+}
+```
+
+### 配置类加载到容器
+
+上面已经做好了自动配置类 接下来就是交给容器就行了 但是交给容器是有规则的就是一定要放在 放在resources下面的META-INF下面的spring.factories 才能被识别到容器里面
+
+我们可以参考任何spring.factories下面的自动配置类 看看他们的规则怎么写的
+
+![image-20200929172816442](SpringBoot笔记.assets/image-20200929172816442.png)
+
+## 3）测试
+
+接下来我们就是测试 看看我们自己写的starter能不能被我们的项目引用
+
+导入依赖
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.3.4.RELEASE</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com.vanward.starter</groupId>
+    <artifactId>mystarter-spring-boot-test</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>mystarter-spring-boot-test</name>
+    <description>Demo project for Spring Boot</description>
+
+    <properties>
+        <java.version>1.8</java.version>
+    </properties>
+
+    <dependencies>
+
+
+
+        <!--引入我们自定义的启动器-->
+        <dependency>
+            <groupId>com.vanward.starter</groupId>
+            <artifactId>mystarter-spring-boot-starter</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
+        <!--引入web模块-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.vintage</groupId>
+                    <artifactId>junit-vintage-engine</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+```
+
+编写控制器 启动项目
+
+```java
+package com.vanward.starter.mystarterspringboottest.controller;
+
+import com.vanward.starter.service.HelloService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@Controller
+public class HelloController {
+
+
+    @Autowired
+    HelloService helloService;
+
+    @RequestMapping("/hello")
+    @ResponseBody
+    public String sayHello(){
+        return helloService.sayHelloService("缪永金");
+
+    }
+}
+```
+
+**注意**：一定要将包建在和启动器同一层次的目录下 不然就是会报错
+
+![image-20200929173155419](SpringBoot笔记.assets/image-20200929173155419.png)
+
+
+
+![image-20200929173309393](SpringBoot笔记.assets/image-20200929173309393.png)![image-20200929173356403](SpringBoot笔记.assets/image-20200929173356403.png)
+
+
+
+![image-20200929173426807](SpringBoot笔记.assets/image-20200929173426807.png)
+
+到此自定义Starter完成 好好体会下整个过程就能明白springboot的自动装配原理是什么了
+
+
+
